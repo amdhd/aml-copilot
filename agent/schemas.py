@@ -26,9 +26,9 @@ class NarrativeSentence(BaseModel):
     level, not document level: the verifier resolves each id independently, so a
     single unsupported claim cannot hide inside a well-sourced paragraph."""
 
-    text: str = Field(max_length=400)
+    text: str = Field(max_length=300)
     evidence_ids: list[str] = Field(min_length=1)
 
 
 class Narrative(BaseModel):
-    sentences: list[NarrativeSentence] = Field(min_length=2, max_length=12)
+    sentences: list[NarrativeSentence] = Field(min_length=2, max_length=8)

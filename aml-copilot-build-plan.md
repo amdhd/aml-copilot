@@ -321,8 +321,8 @@ half price. Do not hardcode cost figures in the README; report measured token us
 | ~~2~~ **DONE** | Explainability + batch scoring | ✅ 57,019 alerts in Postgres from model score; attention + SHAP extractable. 2026-09-04 |
 | ~~3~~ **DONE** | API + worker + nodes 1–2 | ✅ Cases run end to end via FastAPI → Redis → arq → LangGraph. 2026-09-04 |
 | ~~4~~ **DONE** | RAG corpus + nodes 3–4 | ✅ FinCEN ingested to pgvector; narratives draft with sentence-level citations. Corpus incomplete — see §13. 2026-09-04 |
-| 5 ← **next** | Verifier + human gate + evals | Citation validity measured; run pauses and resumes correctly |
-| 6 | UI | Four screens, subgraph renders |
+| ~~5~~ **DONE** | Verifier + human gate + evals | ✅ Citation validity 100% (49/49), 0 hallucinated entities; run pauses at the gate and resumes. 2026-09-04 |
+| 6 ← **next** | UI | Four screens, subgraph renders |
 | 7 | Terraform + deploy | Running on Fargate |
 | 8 | Buffer | README, demo script, before/after metrics |
 
@@ -361,7 +361,7 @@ aml-copilot/
 
 ---
 
-## 12. Status — Weeks 1–4 complete (2026-09-04)
+## 12. Status — Weeks 1–5 complete (2026-09-04)
 
 Built, 384 lines across five files. Nothing downstream scaffolded.
 
@@ -444,11 +444,37 @@ The graph now short-circuits to END when typology is `none`: no suspicious patte
 means no report, and drafting one anyway manufactures suspicion the classifier did
 not find.
 
-### Next task — Week 5 only. Do not scaffold anything else.
+**Week 5 added:**
 
-Node 5 `verify_citations` (deterministic Python), node 6 `human_review`
-(LangGraph interrupt), and the eval harness. See the fixture-labelling warning in
-§13 before building the fixtures.
+```
+agent/verify.py                node 5 - deterministic, no LLM
+agent/nodes/human_review.py    node 6 - LangGraph interrupt
+eval/fixtures.json             8 alerts, labelled by inspecting the pattern
+eval/run_evals.py              make eval
+```
+
+`POST /cases/{id}/decision` resumes a run parked at the gate. Verified: a case
+stops at `awaiting_review` with 7 checkpoints in Postgres, then resumes to
+`approved`.
+
+### Eval results — qwen/qwen3.8-27b on Groq, 8 fixtures
+
+| Metric | Target | Result |
+|---|---|---|
+| Typology accuracy | report | **2/8 (25%)** |
+| Citation validity | **100%** | **100.0% (49/49)** |
+| Hallucinated entities | **0** | **0** |
+| Escalated after retry | report | 0 |
+| p50 / p95 latency | report | 21.6s / 82.0s |
+| Tokens per case | report | 4,108 in, 450 out |
+| Prompt cache hit rate | report | 0.0% |
+| Provider errors | report | 0 |
+
+### Next task — Week 6 only. Do not scaffold anything else.
+
+Four screens: alert queue, case view with citations on hover, subgraph, approve
+/ reject. No auth. Read §13 first — the typology classifier is the weak part and
+the UI must not present its output as more certain than it is.
 
 ---
 
@@ -457,6 +483,71 @@ Node 5 `verify_citations` (deterministic Python), node 6 `human_review`
 Things learned by building it that were not knowable from the plan.
 
 ---
+
+### Week 5 — verifier, human gate, evals
+
+#### The thesis holds, but on a smaller sample than the number suggests
+
+**Citation validity 100% (49/49), hallucinated entities 0.** Deterministic
+verification works: every evidence_id in every drafted sentence resolved to a fact
+node 1 assembled, and no narrative named an account outside the bundle.
+
+The caveat that must travel with that number: **only 3 of 8 fixtures produced a
+narrative at all.** The other 5 were classified `none` and short-circuited before
+drafting. 49 citations across 3 narratives is a real result but a thin one. Report it
+as "100% across 3 narratives", never as "100% across 8 cases".
+
+#### Typology classification is the weak part: 25%, and confidently wrong
+
+The model answered `none` for 5 of 8 fixtures at 0.90-0.95 confidence, when exactly
+one fixture is `none`.
+
+| alert | expected | predicted | confidence |
+|---|---|---|---|
+| 5077604 | rapid_movement | none | 0.95 |
+| 5077725 | rapid_movement | rapid_movement | 0.95 |
+| 5077723 | layering | rapid_movement | 0.95 |
+| 4987170 | smurfing | none | 0.90 |
+| 5077931 | layering | rapid_movement | 0.85 |
+| 5077454 | layering | none | 0.95 |
+| 5077772 | layering | none | 0.95 |
+| 4385373 | none | none | 0.95 |
+
+Two things follow, and neither is cosmetic:
+
+**Confidence is not calibrated.** 0.95 on wrong answers is as common as on right
+ones. It cannot be used for triage or for auto-approving anything, and the UI must
+not display it as if it means something.
+
+**Three hypotheses for the `none` bias, untested, in order of suspicion.** (1) The
+system prompt says "say none if the pattern is absent" and "same-account transfers
+are routine bookkeeping" — both written to fix earlier problems, both pushing toward
+`none`. (2) `HISTORY_LIMIT = 25` nearest-in-time transactions is too few: account
+15-803DE4A90 has 41 transactions and its pattern is accumulate-then-disperse across
+four days, which cannot be seen through a 25-transaction window. (3) The evidence
+bundle is a flat list of transactions; the model must infer the pattern with no
+aggregate view. Do not tune the prompt without re-running the harness — that is what
+it is for.
+
+#### Citation validity and usefulness remain independent
+
+Worth restating with numbers now: the run scoring 100% citation validity also scored
+25% on typology. A perfectly cited narrative about the wrong typology is a perfectly
+cited wrong answer. **The verifier proves the narrative rests on real evidence; it
+proves nothing about whether the conclusion is right.** That is the honest framing of
+the centrepiece.
+
+#### Free-tier limits shape the measurement
+
+Groq's free tier caps output at 1000 tokens/minute, below the SDK's 2048 default, so
+requests failed before running until `max_tokens` was set per node (400 classify, 900
+narrative). p95 latency of 82s (max 117s) is throttling, not model speed — the §8
+design target of 10-20s is not disproven, just not measurable on a free tier.
+
+Prompt cache hit rate came back 0.0%. Either the provider does not report
+`cached_tokens` through the OpenAI shim or it does not cache at all. §5 treats cache
+hit rate as a reported metric; on this provider it is unmeasurable, and that should be
+stated rather than reported as a genuine zero.
 
 ### Week 4 — RAG, narrative drafting
 

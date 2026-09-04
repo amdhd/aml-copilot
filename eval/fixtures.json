@@ -1,0 +1,42 @@
+[
+  {
+    "alert_id": 5077604,
+    "typology": "rapid_movement",
+    "why": "Account 2439-80604C300 receives 12,791,378 USD at 09-11 14:33 and sends 876,934,779 Rupee (~equal value) at 19:36 the same day. Funds rest about five hours."
+  },
+  {
+    "alert_id": 5077725,
+    "typology": "rapid_movement",
+    "why": "Account 14766-805C42580 receives 876,934,779 Rupee at 09-11 19:36 and sends 10,189,752 Euro (~equal value) at 09-12 10:14. Funds rest about fifteen hours."
+  },
+  {
+    "alert_id": 5077723,
+    "typology": "layering",
+    "why": "886,180,042 Rupee same-account transfer at 09-12 10:14, the same minute as the 10,189,752 Euro outbound and of roughly equal value. This is the currency-conversion leg of the dispersal, not bookkeeping. Deliberately the hard case: the system prompt tells the model same-account transfers are routine."
+  },
+  {
+    "alert_id": 4987170,
+    "typology": "smurfing",
+    "why": "783,398 Yen, one of twelve small incoming deposits into 15-803DE4A90 between 09-09 and 09-12 before any outflow. Accumulation from many sources in amounts far below the account's later transfers."
+  },
+  {
+    "alert_id": 5077931,
+    "typology": "layering",
+    "why": "307,580 Ruble out of 15-803DE4A90 at 09-13 03:44, paired in the same minute with a 416,675 Yen same-account transfer. One of nine such pairs dispersing the accumulated balance across Euro, Ruble, USD and CAD."
+  },
+  {
+    "alert_id": 5077454,
+    "typology": "layering",
+    "why": "31,392 Saudi Riyal out of 11128-8045F4500 at 09-11 13:50, paired with an 882,067 Yen same-account transfer. The account makes twelve such paired outbound conversions across six currencies in five days and receives nothing."
+  },
+  {
+    "alert_id": 5077772,
+    "typology": "layering",
+    "why": "1,429,422 Yen same-account transfer at 09-12 12:28 in account 24-803D94320, paired with a 13,562 USD outbound, two days after a 1,538,507 Yen inbound. Conversion and dispersal of a single received sum."
+  },
+  {
+    "alert_id": 4385373,
+    "typology": "none",
+    "why": "Two identical 9,567.48 Ruble payments between the same pair of accounts a week apart. A recurring payment, not structuring: the amounts are ~100 USD and nowhere near any reporting threshold, and the account shows no laundering activity."
+  }
+]

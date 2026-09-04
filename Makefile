@@ -21,6 +21,9 @@ api:
 worker:
 	$(UV) run arq api.worker.WorkerSettings
 
+eval:
+	$(UV) run python -m eval.run_evals
+
 tensorboard:
 	$(UV) run tensorboard --logdir runs --port 6006
 
@@ -29,4 +32,4 @@ smoke:
 	$(MAKE) train CSV=data/smoke_Trans.csv ARGS="--epochs 5"
 	$(MAKE) baseline CSV=data/smoke_Trans.csv
 
-.PHONY: train baseline score api worker tensorboard smoke
+.PHONY: train baseline score api worker eval tensorboard smoke

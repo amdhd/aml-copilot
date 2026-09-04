@@ -12,4 +12,10 @@ class CaseState(TypedDict, total=False):
     confidence: float
     reasoning: str
     narrative: list         # [{text, evidence_ids}] from node 4
+    draft_attempts: int     # node 4 runs at most twice
+    citation_failures: list # evidence_ids that do not resolve
+    hallucinated_entities: list
+    verified: bool
+    escalated: bool         # failed verification twice
+    decision: str           # human_review outcome
     usage: dict             # token counts per LLM node

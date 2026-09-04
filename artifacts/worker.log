@@ -1,10 +1,12 @@
 PYTHONUNBUFFERED=1 /Users/amdhd/.local/bin/uv run arq api.worker.WorkerSettings
 /Users/amdhd/nilma_pytorch/.venv/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
   warnings.warn(
-19:55:10: Starting worker for 1 functions: run_case
-19:55:10: redis_version=7.4.11 mem_usage=1.45M clients_connected=2 db_keys=13
+21:10:13: Starting worker for 1 functions: run_case
+21:10:13: redis_version=7.4.11 mem_usage=1.45M clients_connected=2 db_keys=0
 worker ready: GNN loaded
-19:55:55:   0.18s → b68ad557ff04464384551c6d6dab9787:run_case('ffc3ea7d-2bfb-4668-a8d1-6474a635f83a', 5077725)
+21:11:02:   0.45s → 69b64e5bfe894bb08bd0ae1140c3104c:run_case('463faaac-d9b1-4e85-aaaf-be4c30d44e43', 5077725)
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-Loading weights:   0%|          | 0/310 [00:00<?, ?it/s]Loading weights: 100%|██████████| 310/310 [00:00<00:00, 4688.86it/s]
-19:56:24:  29.07s ← b68ad557ff04464384551c6d6dab9787:run_case ● 
+Loading weights:   0%|          | 0/310 [00:00<?, ?it/s]Loading weights: 100%|██████████| 310/310 [00:00<00:00, 5164.52it/s]
+21:11:31:  29.26s ← 69b64e5bfe894bb08bd0ae1140c3104c:run_case ● 
+21:11:37:   0.44s → b3461605c8a34c4cba073a0049b6674d:run_case('463faaac-d9b1-4e85-aaaf-be4c30d44e43', 5077725, 'approved')
+21:11:37:   0.04s ← b3461605c8a34c4cba073a0049b6674d:run_case ● 

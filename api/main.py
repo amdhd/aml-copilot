@@ -7,6 +7,8 @@ import psycopg
 from arq import create_pool
 from arq.connections import RedisSettings
 from fastapi import FastAPI, HTTPException
+from typing import Literal
+
 from pydantic import BaseModel
 
 from ml.score_batch import DSN
@@ -24,6 +26,9 @@ CREATE TABLE IF NOT EXISTS cases (
     created_at     timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS narrative jsonb;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS verified boolean;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS escalated boolean;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS verification jsonb;
 """
 
 app = FastAPI(title="AML Investigation Copilot")
@@ -31,6 +36,10 @@ app = FastAPI(title="AML Investigation Copilot")
 
 class CaseRequest(BaseModel):
     alert_id: int
+
+
+class Decision(BaseModel):
+    decision: Literal["approved", "rejected"]
 
 
 @app.on_event("startup")
@@ -72,9 +81,26 @@ async def get_case(case_id: str):
     async with await psycopg.AsyncConnection.connect(DSN) as conn:
         row = await (await conn.execute(
             "SELECT case_id, alert_id, status, typology, confidence, reasoning,"
-            " evidence_count, error, narrative FROM cases WHERE case_id = %s", (case_id,))).fetchone()
+            " evidence_count, error, narrative, verified, escalated, verification"
+            " FROM cases WHERE case_id = %s", (case_id,))).fetchone()
     if row is None:
         raise HTTPException(404, "no such case")
     keys = ("case_id", "alert_id", "status", "typology", "confidence",
-            "reasoning", "evidence_count", "error", "narrative")
+            "reasoning", "evidence_count", "error", "narrative", "verified",
+            "escalated", "verification")
     return dict(zip(keys, (str(row[0]), *row[1:])))
+
+
+@app.post("/cases/{case_id}/decision", status_code=202)
+async def decide(case_id: str, body: Decision):
+    """Resume a run parked at the human gate. The graph has been waiting in
+    Postgres since the interrupt, however long that took."""
+    async with await psycopg.AsyncConnection.connect(DSN, autocommit=True) as conn:
+        row = await (await conn.execute(
+            "SELECT status, alert_id FROM cases WHERE case_id = %s", (case_id,))).fetchone()
+        if row is None:
+            raise HTTPException(404, "no such case")
+        if row[0] != "awaiting_review":
+            raise HTTPException(409, f"case is {row[0]}, not awaiting_review")
+    await app.state.redis.enqueue_job("run_case", case_id, row[1], body.decision)
+    return {"case_id": case_id, "status": body.decision}
