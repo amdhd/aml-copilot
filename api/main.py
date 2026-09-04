@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS cases (
     error          text,
     created_at     timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS narrative jsonb;
 """
 
 app = FastAPI(title="AML Investigation Copilot")
@@ -71,9 +72,9 @@ async def get_case(case_id: str):
     async with await psycopg.AsyncConnection.connect(DSN) as conn:
         row = await (await conn.execute(
             "SELECT case_id, alert_id, status, typology, confidence, reasoning,"
-            " evidence_count, error FROM cases WHERE case_id = %s", (case_id,))).fetchone()
+            " evidence_count, error, narrative FROM cases WHERE case_id = %s", (case_id,))).fetchone()
     if row is None:
         raise HTTPException(404, "no such case")
     keys = ("case_id", "alert_id", "status", "typology", "confidence",
-            "reasoning", "evidence_count", "error")
+            "reasoning", "evidence_count", "error", "narrative")
     return dict(zip(keys, (str(row[0]), *row[1:])))

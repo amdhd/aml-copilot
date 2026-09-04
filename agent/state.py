@@ -11,4 +11,5 @@ class CaseState(TypedDict, total=False):
     typology: str
     confidence: float
     reasoning: str
+    narrative: list         # [{text, evidence_ids}] from node 4
     usage: dict             # token counts per LLM node

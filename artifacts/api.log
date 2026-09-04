@@ -1,42 +1,20 @@
+PYTHONUNBUFFERED=1 /Users/amdhd/.local/bin/uv run uvicorn api.main:app --port 8000
 /Users/amdhd/nilma_pytorch/.venv/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
   warnings.warn(
-INFO:     Started server process [59108]
+INFO:     Started server process [65416]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-INFO:     127.0.0.1:56885 - "GET /alerts?limit=3 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56888 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:56916 - "GET /cases/d2acd6a0-874d-43b2-986e-12cc5c3653c5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57208 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:57211 - "GET /cases/4860d83c-ecfe-4673-a181-22e4f3e3feec HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57216 - "GET /cases/4860d83c-ecfe-4673-a181-22e4f3e3feec HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57221 - "GET /cases/4860d83c-ecfe-4673-a181-22e4f3e3feec HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57229 - "GET /cases/4860d83c-ecfe-4673-a181-22e4f3e3feec HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57238 - "GET /cases/4860d83c-ecfe-4673-a181-22e4f3e3feec HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57243 - "GET /cases/4860d83c-ecfe-4673-a181-22e4f3e3feec HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57246 - "GET /cases/4860d83c-ecfe-4673-a181-22e4f3e3feec HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57252 - "GET /cases/4860d83c-ecfe-4673-a181-22e4f3e3feec HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57259 - "GET /cases/4860d83c-ecfe-4673-a181-22e4f3e3feec HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57266 - "GET /cases/4860d83c-ecfe-4673-a181-22e4f3e3feec HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57269 - "GET /cases/4860d83c-ecfe-4673-a181-22e4f3e3feec HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57283 - "GET /cases/4860d83c-ecfe-4673-a181-22e4f3e3feec HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57286 - "GET /cases/4860d83c-ecfe-4673-a181-22e4f3e3feec HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57292 - "GET /cases/4860d83c-ecfe-4673-a181-22e4f3e3feec HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57306 - "POST /cases HTTP/1.1" 422 Unprocessable Entity
-INFO:     127.0.0.1:57352 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:57377 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:57380 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:57383 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:57389 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:57904 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:57907 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:57910 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:57913 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:58151 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:58154 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:58157 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:58160 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:58865 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:58868 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:59362 - "POST /cases HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:59365 - "POST /cases HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:60406 - "GET /alerts?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60411 - "POST /cases HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:60422 - "GET /cases/45ac8b9f-e09a-44d5-bf0b-42664955c07b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60430 - "GET /cases/45ac8b9f-e09a-44d5-bf0b-42664955c07b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60437 - "GET /cases/45ac8b9f-e09a-44d5-bf0b-42664955c07b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60447 - "GET /cases/45ac8b9f-e09a-44d5-bf0b-42664955c07b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60450 - "GET /cases/45ac8b9f-e09a-44d5-bf0b-42664955c07b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60529 - "POST /cases HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:60539 - "GET /cases/ffc3ea7d-2bfb-4668-a8d1-6474a635f83a HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60547 - "GET /cases/ffc3ea7d-2bfb-4668-a8d1-6474a635f83a HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60554 - "GET /cases/ffc3ea7d-2bfb-4668-a8d1-6474a635f83a HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60566 - "GET /cases/ffc3ea7d-2bfb-4668-a8d1-6474a635f83a HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60569 - "GET /cases/ffc3ea7d-2bfb-4668-a8d1-6474a635f83a HTTP/1.1" 200 OK

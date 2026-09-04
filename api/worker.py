@@ -2,6 +2,7 @@
 indefinitely at the human gate, which no blocking HTTP request can represent."""
 
 import asyncio
+import json
 import os
 
 import psycopg
@@ -27,14 +28,15 @@ async def run_case(ctx, case_id: str, alert_id: int):
     try:
         state = await asyncio.to_thread(_run, case_id, alert_id)
         row = ("done", state["typology"], state["confidence"], state["reasoning"],
-               len(state["evidence"]), None, case_id)
+               len(state["evidence"]), json.dumps(state.get("narrative")), None, case_id)
     except Exception as error:                      # surface it, never hang
-        row = ("failed", None, None, None, None, f"{type(error).__name__}: {error}", case_id)
+        row = ("failed", None, None, None, None, None,
+               f"{type(error).__name__}: {error}", case_id)
 
     async with await psycopg.AsyncConnection.connect(DSN, autocommit=True) as conn:
         await conn.execute(
             "UPDATE cases SET status=%s, typology=%s, confidence=%s, reasoning=%s,"
-            " evidence_count=%s, error=%s WHERE case_id=%s", row)
+            " evidence_count=%s, narrative=%s, error=%s WHERE case_id=%s", row)
 
 
 async def startup(ctx):

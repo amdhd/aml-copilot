@@ -320,8 +320,8 @@ half price. Do not hardcode cost figures in the README; report measured token us
 | ~~1~~ **DONE** | Data + GNN baseline | ✅ GAT 0.4009 test F1 vs XGBoost 0.1817. Gate passed 2026-09-04 |
 | ~~2~~ **DONE** | Explainability + batch scoring | ✅ 57,019 alerts in Postgres from model score; attention + SHAP extractable. 2026-09-04 |
 | ~~3~~ **DONE** | API + worker + nodes 1–2 | ✅ Cases run end to end via FastAPI → Redis → arq → LangGraph. 2026-09-04 |
-| 4 ← **next** | RAG corpus + nodes 3–4 | FATF/FinCEN ingested to pgvector; narrative drafts with citations |
-| 5 | Verifier + human gate + evals | Citation validity measured; run pauses and resumes correctly |
+| ~~4~~ **DONE** | RAG corpus + nodes 3–4 | ✅ FinCEN ingested to pgvector; narratives draft with sentence-level citations. Corpus incomplete — see §13. 2026-09-04 |
+| 5 ← **next** | Verifier + human gate + evals | Citation validity measured; run pauses and resumes correctly |
 | 6 | UI | Four screens, subgraph renders |
 | 7 | Terraform + deploy | Running on Fargate |
 | 8 | Buffer | README, demo script, before/after metrics |
@@ -361,7 +361,7 @@ aml-copilot/
 
 ---
 
-## 12. Status — Weeks 1–3 complete (2026-09-04)
+## 12. Status — Weeks 1–4 complete (2026-09-04)
 
 Built, 384 lines across five files. Nothing downstream scaffolded.
 
@@ -427,10 +427,28 @@ api/worker.py                     arq worker
 node 1 pulls history from SQL rather than every worker holding a 5M-row dataframe.
 Config lives in `.env`, loaded by the Makefile — see §13.
 
-### Next task — Week 4 only. Do not scaffold anything else.
+**Week 4 added:**
 
-FATF/FinCEN corpus into pgvector; nodes 3–4. Narrative drafts with citations. No
-verifier and no UI yet — those are weeks 5–6.
+```
+rag/ingest.py                     corpus -> pgvector, local embeddings
+agent/nodes/retrieve_guidance.py  node 3 - pgvector query, no LLM
+agent/nodes/draft_narrative.py    node 4 - LLM, sentence-level citations
+```
+
+Embeddings are local (`Qwen3-Embedding-0.6B`, 1024-dim, 32k context). Measured on
+the dev box: 205ms/encode, 0.7GB RSS, 1.1GB disk — faster and barely heavier than
+`bge-base` while carrying 64x the context. Node 3 embeds a query on every case, so
+an embedding API would put a rate limit in the path of every investigation.
+
+The graph now short-circuits to END when typology is `none`: no suspicious pattern
+means no report, and drafting one anyway manufactures suspicion the classifier did
+not find.
+
+### Next task — Week 5 only. Do not scaffold anything else.
+
+Node 5 `verify_citations` (deterministic Python), node 6 `human_review`
+(LangGraph interrupt), and the eval harness. See the fixture-labelling warning in
+§13 before building the fixtures.
 
 ---
 
@@ -439,6 +457,49 @@ verifier and no UI yet — those are weeks 5–6.
 Things learned by building it that were not knowable from the plan.
 
 ---
+
+### Week 4 — RAG, narrative drafting
+
+#### The corpus is incomplete and this is the main gap
+
+Only FinCEN's SAR narrative guidance is ingested (33 pages, 48 chunks). **FATF and
+FFIEC both sit behind Cloudflare bot protection** and return 403 to any automated
+fetch. Working around bot protection was not attempted.
+
+Consequence, measured: a query for "rapid movement of funds" retrieves at 0.49
+similarity, against 0.81 for a SAR-narrative query. The corpus answers *how to write
+a report* but says nothing about *what each typology looks like*. Retrieved guidance
+scored 0.54-0.57 on a live case and **was cited zero times** in the narrative.
+
+**RAG is wired and working but not yet earning its place.** To fix, download by hand
+and drop into `data/corpus/` (ingest picks up any PDF/TXT/MD):
+
+- FATF Trade-Based Money Laundering Risk Indicators (2021)
+- FATF Virtual Assets Red Flag Indicators
+- FFIEC BSA/AML Appendix F — Money Laundering and Terrorist Financing Red Flags
+
+Until then, do not claim the typology classifier is grounded in regulatory guidance.
+It is grounded in the system prompt.
+
+#### The narrative first came out as a data dump
+
+Node 4's first output spent 5 of 11 sentences reciting GNN attention weights,
+neighbourhood sizes and risk scores. Every sentence was correctly cited and every id
+resolved — and it was useless to an analyst, who needs the transaction pattern, not
+the model's arithmetic.
+
+Fixed in the prompt: use attention to decide *which* transactions matter, then write
+about those transactions. After the fix the same class of case produced five
+sentences about money and accounts, correctly flagging a same-account transfer as
+such. **Citation validity and narrative usefulness are independent properties** — the
+week 5 verifier measures the first and says nothing about the second.
+
+#### Providers disagree on the same case
+
+Alert 5077604 was classified `rapid_movement` by Gemini and `none` by Qwen3-32B on
+Groq, from an identical evidence bundle. Not a bug — a real measurement of provider
+variance, and an argument for the week 5 eval harness running the same fixtures
+across providers rather than picking one on vibes.
 
 ### Week 3 — API, worker, nodes 1–2
 

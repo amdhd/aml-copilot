@@ -1,0 +1,49 @@
+"""Node 4: draft the SAR narrative. LLM, schema-validated, sentence-level cites."""
+
+import json
+
+from agent.llm import complete_json
+from agent.schemas import Narrative
+
+SYSTEM = """You draft Suspicious Activity Report narratives for a compliance analyst \
+to review. You do not decide anything; a human approves or rejects your draft.
+
+Rules, in order of importance:
+- Every sentence must carry the evidence_ids it rests on. An id that is not a key \
+in the evidence bundle is a failure, so copy ids exactly.
+- State only what the evidence shows. Never introduce an account, amount, date or \
+currency that does not appear in the evidence.
+- Amounts carry currencies. Do not compare or aggregate across currencies, and do \
+not apply a threshold from one currency to an amount in another.
+- Describe the activity: who, what, when, where, and why it is suspicious.
+- Write about money and accounts, never about the detection model. Attention \
+weights, risk scores and neighbourhood sizes are internal diagnostics; an analyst \
+reading this needs the transaction pattern, not the model's arithmetic. Use \
+gnn_attention evidence to decide which transactions matter, then write about those \
+transactions and cite them.
+- Say when a transfer is between the same account, and do not present it as \
+movement of value between parties.
+- Plain declarative sentences. No speculation, no legal conclusions, no filler.
+
+Return JSON: {"sentences": [{"text": "...", "evidence_ids": ["..."]}, ...]}"""
+
+
+def draft_narrative(state: dict) -> dict:
+    evidence = state["evidence"]
+    guidance = {k: v for k, v in evidence.items() if v["kind"] == "guidance"}
+    facts = {k: v for k, v in evidence.items() if v["kind"] != "guidance"}
+
+    # [system][retrieved guidance][case data], never interleaved, so the prefix
+    # stays stable and provider prompt caching can hit it.
+    case_data = (
+        "REGULATORY GUIDANCE\n"
+        + json.dumps(guidance, indent=1, default=str)
+        + f"\n\nTYPOLOGY: {state['typology']} (confidence {state['confidence']})\n"
+        + "\nEVIDENCE BUNDLE — cite only these ids\n"
+        + json.dumps(facts, indent=1, default=str))
+
+    narrative, usage = complete_json(SYSTEM, case_data, Narrative)
+    return {
+        "narrative": [s.model_dump() for s in narrative.sentences],
+        "usage": {**state.get("usage", {}), "draft_narrative": usage},
+    }
