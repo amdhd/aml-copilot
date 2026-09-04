@@ -1,0 +1,7 @@
+data/
+runs/
+.venv/
+__pycache__/
+*.pyc
+artifacts/*.csv
+artifacts/model-smoke_*.pt
