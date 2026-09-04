@@ -319,8 +319,8 @@ half price. Do not hardcode cost figures in the README; report measured token us
 |---|---|---|
 | ~~1~~ **DONE** | Data + GNN baseline | ✅ GAT 0.4009 test F1 vs XGBoost 0.1817. Gate passed 2026-09-04 |
 | ~~2~~ **DONE** | Explainability + batch scoring | ✅ 57,019 alerts in Postgres from model score; attention + SHAP extractable. 2026-09-04 |
-| 3 ← **next** | API + worker + nodes 1–2 | One case runs end-to-end, typology classified, no RAG yet |
-| 4 | RAG corpus + nodes 3–4 | FATF/FinCEN ingested to pgvector; narrative drafts with citations |
+| ~~3~~ **DONE** | API + worker + nodes 1–2 | ✅ Cases run end to end via FastAPI → Redis → arq → LangGraph. 2026-09-04 |
+| 4 ← **next** | RAG corpus + nodes 3–4 | FATF/FinCEN ingested to pgvector; narrative drafts with citations |
 | 5 | Verifier + human gate + evals | Citation validity measured; run pauses and resumes correctly |
 | 6 | UI | Four screens, subgraph renders |
 | 7 | Terraform + deploy | Running on Fargate |
@@ -361,7 +361,7 @@ aml-copilot/
 
 ---
 
-## 12. Status — Weeks 1–2 complete (2026-09-04)
+## 12. Status — Weeks 1–3 complete (2026-09-04)
 
 Built, 384 lines across five files. Nothing downstream scaffolded.
 
@@ -410,10 +410,27 @@ Train precision being *worse* than test is a good sign — the model is not memo
 its training period. The demo queue should filter to `split = 'test'`; train rows are
 in-sample and their scores are not honest.
 
-### Next task — Week 3 only. Do not scaffold anything else.
+**Week 3 added:**
 
-FastAPI + arq worker + LangGraph nodes 1–2. One case runs end to end and gets a
-typology. No RAG, no verifier, no UI yet.
+```
+agent/schemas.py                  typology enum, confidence bounded 0-1
+agent/state.py                    case state across the graph
+agent/llm.py                      OpenAI-compatible client, retry, usage
+agent/nodes/gather_context.py     node 1 - evidence bundle, no LLM
+agent/nodes/classify_typology.py  node 2 - LLM, schema-validated
+agent/graph.py                    LangGraph, fixed edges, Postgres checkpointer
+api/main.py                       POST /cases, GET /cases/{id}, GET /alerts
+api/worker.py                     arq worker
+```
+
+`transactions` table loaded (5,078,345 rows, indexed on both endpoints per §8) so
+node 1 pulls history from SQL rather than every worker holding a 5M-row dataframe.
+Config lives in `.env`, loaded by the Makefile — see §13.
+
+### Next task — Week 4 only. Do not scaffold anything else.
+
+FATF/FinCEN corpus into pgvector; nodes 3–4. Narrative drafts with citations. No
+verifier and no UI yet — those are weeks 5–6.
 
 ---
 
@@ -423,7 +440,61 @@ Things learned by building it that were not knowable from the plan.
 
 ---
 
-### Week 2 — explainability, batch scoring
+### Week 3 — API, worker, nodes 1–2
+
+#### `Is Laundering` labels a transaction; a typology describes a pattern
+
+The most consequential finding of week 3, and it changes week 5.
+
+Case 5077724 was classified `rapid_movement` and scored as a false positive against
+the CSV label. Inspecting the account says otherwise:
+
+| txn | time | amount | label |
+|---|---|---|---|
+| 5077604 | 09-11 19:36 | 876,934,779 Rupee in | **LAUNDER** |
+| 5077723 | 09-12 10:14 | 886,180,041 Rupee (self) | — |
+| 5077724 | 09-12 10:14 | 107,427 EUR out | — |
+| 5077725 | 09-12 10:14 | 10,189,751 EUR out | **LAUNDER** |
+
+About $10.5M arrives, rests 15 hours, and leaves within one minute across three
+transactions — two labelled, one not. The model's answer is defensible; the label is
+incomplete.
+
+**Consequence:** scoring typology classification against `Is Laundering` systematically
+punishes correct answers, because the column labels transactions while a typology
+describes a flow. The 8 eval fixtures must carry typology labels assigned by inspecting
+the pattern, not inherited from the CSV. Budget time for that in week 5 — it is a
+labelling task, not a coding one.
+
+#### The citation verifier cannot catch faulty reasoning
+
+Case 4385373 was classified `structuring` on this reasoning: two identical payments of
+9,567.48 **Ruble** are "just below the typical 10,000 reporting threshold". The $10,000
+CTR threshold is US dollars; 9,567 Ruble is roughly $100. The model applied a US rule to
+a foreign-currency amount without converting, and called two identical weekly payments
+"structuring" when that pattern is a recurring payment.
+
+Every evidence id in that reasoning resolves. The evidence is real; the inference is
+wrong. **`verify_citations` catches fabricated evidence, not faulty inference** — worth
+saying out loud before an interviewer finds it, because §5 calls the verifier the
+centerpiece. Week 4's retrieved guidance should reduce this class of error by supplying
+real thresholds; the human gate is what actually catches it.
+
+#### Free-tier rate limits are the real concurrency ceiling
+
+§8 predicted this and it still cost a cycle. `max_jobs=4` against Gemini's free tier
+produced 429s on every case; sequential runs with backoff still exhausted the daily
+quota. Now `max_jobs=1` (env-overridable) and the SDK retries 429/5xx with exponential
+backoff, kept separate from the schema retry — a rate limit is not malformed JSON and
+must not consume the one retry §5 allows.
+
+Provider is `AML_LLM_BASE_URL` + `AML_LLM_MODEL`, so the Gemini → Groq switch was config
+only, no code change. That design held. What failed was operational: environment
+variables do not cross terminal tabs, and three cycles were lost to a worker running
+without the config it was supposed to have. Config now lives in `.env`, loaded by the
+Makefile, gitignored. **Verify config in-process (`ps eww <pid>`) before trusting a run.**
+
+#### Week 2 — explainability, batch scoring
 
 #### F1 is the wrong headline metric here — lead with AUC-PR
 

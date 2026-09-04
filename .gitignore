@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 artifacts/*.csv
 artifacts/model-smoke_*.pt
+.env
