@@ -21,6 +21,9 @@ api:
 worker:
 	$(UV) run arq api.worker.WorkerSettings
 
+ask:
+	$(UV) run python -m scripts.ask $(MSG)
+
 eval:
 	$(UV) run python -m eval.run_evals
 
@@ -32,4 +35,4 @@ smoke:
 	$(MAKE) train CSV=data/smoke_Trans.csv ARGS="--epochs 5"
 	$(MAKE) baseline CSV=data/smoke_Trans.csv
 
-.PHONY: train baseline score api worker eval tensorboard smoke
+.PHONY: train baseline score api worker ask eval tensorboard smoke
