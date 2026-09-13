@@ -1,0 +1,94 @@
+name: CI
+
+# The eval harness is deliberately not here. It needs a paid provider key, costs
+# money per run, and the provider is not deterministic at temperature=0 -- see
+# section 13. `make eval` stays manual.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  smoke:
+    name: Pipeline on a synthetic fixture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+
+      - name: Compile every source file
+        run: uv run python -m compileall -q agent api ml rag scripts eval
+
+      - name: GAT and XGBoost end to end
+        # Generates its own 8k-row CSV in the IBM schema. No dataset, no
+        # database, no provider key. Proves the pipeline executes; the numbers
+        # it prints are not results.
+        #
+        # UV is overridden because the Makefile hardcodes $(HOME)/.local/bin/uv;
+        # setup-uv installs into the tool cache and exposes it on PATH instead.
+        run: make smoke UV="PYTHONUNBUFFERED=1 uv"
+
+  api:
+    name: API schema and startup
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: aml
+          POSTGRES_PASSWORD: aml
+          POSTGRES_DB: aml
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      AML_DSN: postgresql://aml:aml@localhost:5432/aml
+      AML_REDIS: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+
+      # Start and assert in one step: a backgrounded uvicorn that outlives its
+      # step keeps the uv cache open and the post-job prune then fails.
+      - name: API starts and applies its schema
+        run: |
+          trap 'pkill -f "uvicorn api.main:app" || true' EXIT
+          uv run uvicorn api.main:app --port 8000 &
+          for _ in $(seq 1 60); do
+            curl -sf http://localhost:8000/docs >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://localhost:8000/docs >/dev/null \
+            || { echo "API did not become ready"; exit 1; }
+          uv run python - <<'EOF'
+          import os, sys, psycopg
+          with psycopg.connect(os.environ["AML_DSN"]) as conn:
+              cols = {r[0] for r in conn.execute(
+                  "SELECT column_name FROM information_schema.columns"
+                  " WHERE table_name = 'cases'")}
+          want = {"case_id", "alert_id", "status", "typology", "confidence",
+                  "reasoning", "evidence_count", "error", "created_at",
+                  "narrative", "verified", "escalated", "verification", "evidence"}
+          missing = want - cols
+          if missing:
+              sys.exit(f"cases is missing columns: {sorted(missing)}")
+          print(f"cases schema ok, {len(cols)} columns")
+          EOF

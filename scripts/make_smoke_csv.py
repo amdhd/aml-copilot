@@ -1,6 +1,8 @@
 """Tiny CSV in the IBM AML schema, so the pipeline can be run without the real
 download. Numbers produced from this file are not results."""
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -46,6 +48,8 @@ df = pd.DataFrame(rows).sort_values(0)
 header = ("Timestamp,From Bank,Account,To Bank,Account,Amount Received,"
           "Receiving Currency,Amount Paid,Payment Currency,Payment Format,"
           "Is Laundering")
+# data/ is gitignored, so it does not exist in a fresh clone.
+Path("data").mkdir(exist_ok=True)
 with open("data/smoke_Trans.csv", "w") as f:
     f.write(header + "\n")
     df.to_csv(f, header=False, index=False)

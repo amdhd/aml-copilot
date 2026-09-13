@@ -4,7 +4,9 @@
 export
 
 CSV ?= data/HI-Small_Trans.csv
-UV  := PYTHONUNBUFFERED=1 $(HOME)/.local/bin/uv
+# uv from PATH where it is available; the explicit path is the fallback for
+# shells that do not have it, and is wrong anywhere else (CI, containers).
+UV  := PYTHONUNBUFFERED=1 $(shell command -v uv || echo $(HOME)/.local/bin/uv)
 
 train:
 	$(UV) run python -m ml.train --csv $(CSV) $(ARGS)
