@@ -23,6 +23,9 @@ jobs:
       - name: Compile every source file
         run: uv run python -m compileall -q agent api ml rag scripts eval
 
+      - name: Unit tests
+        run: uv run pytest
+
       - name: GAT and XGBoost end to end
         # Generates its own 8k-row CSV in the IBM schema. No dataset, no
         # database, no provider key. Proves the pipeline executes; the numbers

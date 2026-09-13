@@ -22,3 +22,12 @@ dependencies = [
     "pypdf>=6.17.0",
     "pgvector>=0.5.0",
 ]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+# Flat layout: the packages are run as `python -m ml.train` from the repo
+# root, so the root has to be importable here too.
+pythonpath = ["."]
+testpaths = ["tests"]
