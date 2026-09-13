@@ -19,35 +19,49 @@ for the design and §13 for findings that changed it.
 
 `make eval` — 8 fixtures, labelled by inspecting each account's transaction pattern
 rather than by copying the dataset's per-transaction `Is Laundering` column (two of the
-eight disagree with it). Provider `qwen/qwen3.8-27b` on Groq.
+eight disagree with it). Provider `deepseek-flash` on DeepSeek.
 
 | Metric | Target | Result |
 |---|---|---|
-| Typology accuracy | report | **2/8 (25%)** |
-| Citation validity | **100%** | **100.0% (49/49)** |
+| Typology accuracy | report | **3/8 (38%)** |
+| Citation validity | **100%** | **100.0% (165/165)** |
 | Hallucinated entities | **0** | **0** |
 | Escalated after retry | report | 0 |
-| p50 / p95 latency | report | 21.6s / 82.0s |
-| Tokens per case | report | 4,108 in, 450 out |
-| Prompt cache hit rate | report | 0.0% |
+| Provider errors | report | 1 |
+| p50 / p95 latency | report | 44.7s / 60.6s |
+| Tokens per case | report | 7,374 in, 3,249 out |
+| Prompt cache hit rate | report | 74.2% |
 
-**Read these two numbers together.** Deterministic verification works: every
-`evidence_id` in every drafted sentence resolved to a fact the pipeline actually
-assembled, and no narrative named an account outside the evidence bundle. But the same
-run classified the typology correctly only twice in eight. **A perfectly cited narrative
-about the wrong typology is a perfectly cited wrong answer.** The verifier proves the
-narrative rests on real evidence; it proves nothing about whether the conclusion is
-right.
+**Read these two numbers together.** Deterministic verification works: across 165
+citations in 6 narratives, every `evidence_id` in every drafted sentence resolved to a
+fact the pipeline actually assembled, and no narrative named an account outside the
+evidence bundle. But the same run classified the typology correctly only three times in
+eight. **A perfectly cited narrative about the wrong typology is a perfectly cited wrong
+answer.** The verifier proves the narrative rests on real evidence; it proves nothing
+about whether the conclusion is right.
 
-Three caveats that belong with the table:
+The 74.2% cache hit rate is the one design decision that measured cleanly: §5 builds
+every prompt `[system][case data]` with no interleaving, and the stable prefix hits.
 
-- **Citation validity is measured across 3 narratives, not 8.** Five fixtures were
-  classified `none` and short-circuited before drafting. 49/49 is real but thin.
-- **Confidence is not calibrated.** The model answered `none` five times at 0.90–0.95
-  confidence when one fixture is `none`. Confidence cannot be used for triage.
-- **Latency and cache rate are free-tier artifacts.** p95 of 82s is Groq throttling, not
-  model speed. The 0.0% cache rate means the provider does not report `cached_tokens`
-  through its OpenAI-compatible shim, not that caching definitively failed.
+Caveats that belong with the table:
+
+- **The typology number is not reproducible to ±1.** The provider is not deterministic
+  at `temperature=0` — one fixture returned three different typologies across three
+  samples of identical input. 3/8 is a single draw, not a measurement. Quote it with a
+  range across runs or not at all.
+- **Confidence is not calibrated, and here it inverts.** The three correct answers came
+  back at 0.60, 0.62 and 0.70; the four wrong ones at 0.68–0.78. The most confident
+  answer in the run is wrong. Confidence cannot be used for triage.
+- **One fixture produced no narrative.** 5077931 classified, then failed drafting twice
+  by writing a sentence past the 300-character cap. 165/165 covers the six cases that
+  drafted; the eighth never reached the verifier.
+- **Latency is the reasoning model, not throttling.** `deepseek-flash` spends roughly
+  3,400 tokens on chain-of-thought per classification. That is why output tokens are 7x
+  an earlier Groq run and p50 doubled.
+
+The per-node token budgets (8,000) are sized for a model that bills chain-of-thought
+against `max_tokens`. They exceed Groq's free-tier output cap — read §13 before
+switching providers.
 
 ---
 

@@ -15,7 +15,7 @@ from ml.model import GAT
 from ml.score_batch import DSN
 
 CSV = "data/HI-Small_Trans.csv"
-HISTORY_LIMIT = 25
+HISTORY_LIMIT = 100
 _cache: dict = {}
 
 
@@ -52,16 +52,19 @@ def gather_context(state: dict) -> dict:
         history = conn.execute(
             "SELECT txn_id, ts, src_account, dst_account, amount, currency, "
             "payment_format FROM transactions "
-            "WHERE src_account = %s OR dst_account = %s "
+            "WHERE src_account IN (%s, %s) OR dst_account IN (%s, %s) "
             "ORDER BY abs(extract(epoch FROM ts - %s)) LIMIT %s",
-            (src, src, ts, HISTORY_LIMIT)).fetchall()
+            (src, dst, src, dst, ts, HISTORY_LIMIT)).fetchall()
 
     for h in history:
+        # History now spans both endpoints, so direction has to be relative to
+        # whichever of the two this transaction actually touches.
+        party = src if src in (h[2], h[3]) else dst
         evidence[f"txn:{h[0]}"] = {
             "kind": "transaction", "txn_id": h[0], "timestamp": str(h[1]),
             "src_account": h[2], "dst_account": h[3], "amount": float(h[4]),
-            "currency": h[5], "payment_format": h[6],
-            "direction": "outgoing" if h[2] == src else "incoming",
+            "currency": h[5], "payment_format": h[6], "account": party,
+            "direction": "outgoing" if h[2] == party else "incoming",
         }
 
     data, model = _gnn()
