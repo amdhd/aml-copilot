@@ -26,6 +26,9 @@ worker:
 ask:
 	$(UV) run python -m scripts.ask $(MSG)
 
+test:
+	$(UV) run pytest
+
 eval:
 	$(UV) run python -m eval.run_evals
 
@@ -37,4 +40,4 @@ smoke:
 	$(MAKE) train CSV=data/smoke_Trans.csv ARGS="--epochs 5"
 	$(MAKE) baseline CSV=data/smoke_Trans.csv
 
-.PHONY: train baseline score api worker ask eval tensorboard smoke
+.PHONY: train baseline score api worker ask test eval tensorboard smoke

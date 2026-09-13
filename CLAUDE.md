@@ -60,6 +60,23 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. Commit Messages
+
+**Conventional Commits. One scheme, not three.**
+
+`<type>(<scope>): <imperative subject>` — lowercase subject, no trailing period.
+
+Types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `ci`. Scope is the
+package when it narrows usefully (`fix(agent):`, `feat(api):`) and omitted when
+the change is repo-wide.
+
+The body is where the value is. Say what was wrong and how you know, not what
+the diff already shows. A finding worth recording in the build plan is worth a
+paragraph here.
+
+Early history uses `Week N:` milestone subjects; those are merged and left
+alone. Everything new uses this.
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
