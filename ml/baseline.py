@@ -76,7 +76,10 @@ def main():
     model.fit(x[tr], y[tr], eval_set=[(x[va], y[va])], verbose=False)
 
     Path("artifacts").mkdir(exist_ok=True)
-    model.save_model("artifacts/baseline.json")
+    # Keyed on the dataset: a smoke run must never overwrite a real baseline.
+    out = Path("artifacts") / f"baseline-{Path(args.csv).stem}.json"
+    model.save_model(str(out))
+    print(f"saved {out}")
 
     p_val = model.predict_proba(x[va])[:, 1]
     threshold = best_threshold(y[va], p_val)

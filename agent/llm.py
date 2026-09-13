@@ -46,7 +46,16 @@ def complete_json(system: str, case_data: str, schema: type[BaseModel],
             model=MODEL, messages=messages, temperature=0,
             max_tokens=max_tokens,          # reasoning models spend this on CoT too
             response_format={"type": "json_object"})
-        raw = response.choices[0].message.content
+        choice = response.choices[0]
+        if choice.finish_reason == "length":
+            # A reasoning model bills its chain-of-thought against max_tokens and
+            # can spend the whole budget before emitting any content. Retrying
+            # cannot fix a budget, and the JSON parse error it would otherwise
+            # raise names the wrong cause.
+            raise RuntimeError(
+                f"{MODEL} hit max_tokens={max_tokens} before finishing its "
+                f"response. Raise the budget for this node.")
+        raw = choice.message.content
         try:
             return schema.model_validate_json(raw), _usage(response)
         except ValidationError as error:
