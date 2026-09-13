@@ -529,6 +529,65 @@ bundle is a flat list of transactions; the model must infer the pattern with no
 aggregate view. Do not tune the prompt without re-running the harness — that is what
 it is for.
 
+#### Hypothesis (2) tested and it is the wrong lead (2026-09-11)
+
+Raised `HISTORY_LIMIT` 25 → 100 and re-ran the harness. **Typology accuracy did not
+move: 2/8 before, 2/8 after, every one of the eight classifications identical.** That
+result means much less than it appears to, and the reason is the finding.
+
+The window was only ever truncating one fixture. Transactions per fixture account:
+
+| alert | account | txns | truncated at 25 |
+|---|---|---|---|
+| 5077931 | 15-803DE4A90 | **41** | **yes — lost 16** |
+| 5077454 | 11128-8045F4500 | 25 | no — exactly at the limit |
+| 4987170 | 128590-80ADBB8A0 | 23 | no |
+| 5077723 | 14766-805C42580 | 5 | no |
+| 5077725 | 14766-805C42580 | 5 | no |
+| 5077604 | 2439-80604C300 | 4 | no |
+| 5077772 | 24-803D94320 | 4 | no |
+| 4385373 | 319127-806F2A7D0 | 2 | no |
+
+Seven of eight accounts hold fewer than 25 transactions, so node 1 was already
+returning their complete history. Confirmed rather than assumed: prompt tokens came
+back **byte-identical** across the two runs for all seven — 1,410 → 1,410, 4,447 →
+4,447, 5,081 → 5,081. A wider window handed them nothing because there was nothing
+left to hand them.
+
+The one account the limit did bind on is 15-803DE4A90 — the same account that
+motivated the hypothesis. At limit 100 its request returned **HTTP 413, request too
+large**, on the Groq free tier. At 25 it was already 10,810 prompt tokens; all 41
+transactions is roughly 17-18k, and a limit of 50 would fail the same way.
+
+**So hypothesis (2) is untested, not disproven.** The distinction matters and the
+phrasing in a writeup must hold it: the limit affected one case, and that case did not
+run. Testing it needs a provider without the free-tier request cap — about $0.003 for
+the single case on DeepSeek.
+
+Two consequences for where to look next:
+
+**Hypotheses (1) and (3) are now the live ones.** Five fixtures were classified `none`
+while the model could already see every transaction on the account. Whatever is going
+wrong there is not truncation. (1) is far cheaper to test.
+
+**A fourth hypothesis, not in the original three.** Node 1 gathers history for the
+*source* account only — the query passes `src` twice and never touches `dst`. The
+destination account's onward movement is absent from the bundle. Four fixtures expect
+`layering` and all four are wrong; two of those accounts (5077723, 5077772) hold 5 and
+4 transactions. For those, whatever makes the case layering is not in the evidence at
+all and no window size can put it there. Layering is a chain across accounts; the
+bundle covers one account.
+
+**Fixture design lesson.** The eight fixtures were chosen for their laundering pattern,
+with no attention to how much account history each one carries. That makes the set
+structurally unable to test any context-window hypothesis — seven of eight cannot
+distinguish a limit of 25 from a limit of 1000. A fixture set meant to test evidence
+sufficiency has to be selected on history depth as well as on typology.
+
+Reverted to `HISTORY_LIMIT = 25`; the run containing the 413 was not kept as
+`eval_results.json`, since a provider error in the file corrupts the citation
+denominator that the README quotes.
+
 #### Citation validity and usefulness remain independent
 
 Worth restating with numbers now: the run scoring 100% citation validity also scored
