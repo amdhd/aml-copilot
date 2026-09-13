@@ -706,6 +706,48 @@ worth quoting needs 3-5 runs and a range, not one run and a percentage. Citation
 validity is more robust — it is a property of every sentence drafted, so it
 aggregates over 165 observations rather than 8.
 
+#### Hypothesis (1), partially tested: no support, and not a refutation either
+
+Softened one of the two clauses — "Same-account transfers are routine bookkeeping and
+are rarely laundering" became "often routine bookkeeping, but not always; judge it by
+the transactions around it in time and value, not by the fact that the sender and
+receiver match."
+
+Two deliberate choices in that wording. The other clause ("say none if the pattern is
+absent") was left alone: the `none` collapse had already cleared 5/8 -> 1/8 by then, so
+it was no longer the active problem, and it is the only thing in the prompt guarding
+against false positives — which 4385373 had just demonstrated the system produces. And
+the replacement does not name the currency-conversion pattern the same-account fixtures
+actually contain, because writing the answer into the prompt would make the eval
+measure nothing.
+
+Stopped after 4 of 8:
+
+| alert | target | before | after | |
+|---|---|---|---|---|
+| 5077604 | no | rapid_movement ✓ | rapid_movement ✓ | same |
+| 5077725 | no | rapid_movement ✓ | layering | **broke** |
+| 5077723 | **yes** | rapid_movement | rapid_movement | unchanged |
+| 4987170 | no | rapid_movement | layering | still wrong |
+
+**The change moved the fixtures it was not aimed at and left the one it was aimed at
+alone.** 5077723 is purpose-built to probe that clause and did not budge. 5077725,
+whose alerted transaction is cross-account, flipped from correct to `layering` —
+plausibly because its *history* contains 5077723's same-account transfer, so removing
+the dismissal let the model read the neighbouring transfer as a layering signal and
+relabel the case. That is a mechanism, not just noise, and it is the wrong direction.
+
+**What this does not establish.** 5077772 never ran, and it is the strongest available
+test of the clause: a same-account transfer that the model was answering `none` on,
+which is exactly the behaviour the clause predicts. Four fixtures, one sample each,
+against a model that gave three different answers across three samples of 4987170.
+
+Read this as "the obvious edit did not help and cost an answer," not as "hypothesis (1)
+is dead." Anyone retrying it should run all eight and sample each 3-5 times, or the
+result will not mean more than this one does.
+
+Reverted.
+
 #### Citation validity and usefulness remain independent
 
 Worth restating with numbers now: the run scoring 100% citation validity also scored
