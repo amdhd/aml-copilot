@@ -38,15 +38,17 @@ async def run_case(ctx, case_id: str, alert_id: int, decision: str | None = None
         state = await asyncio.to_thread(_invoke, case_id, payload)
         row = (_status(state), state["typology"], state["confidence"],
                state["reasoning"], len(state["evidence"]),
-               json.dumps(state.get("narrative")), None, case_id)
+               json.dumps(state.get("narrative")),
+               json.dumps(state["evidence"], default=str), None, case_id)
     except Exception as error:                      # surface it, never hang
-        row = ("failed", None, None, None, None, None,
+        row = ("failed", None, None, None, None, None, None,
                f"{type(error).__name__}: {error}", case_id)
 
     async with await psycopg.AsyncConnection.connect(DSN, autocommit=True) as conn:
         await conn.execute(
             "UPDATE cases SET status=%s, typology=%s, confidence=%s, reasoning=%s,"
-            " evidence_count=%s, narrative=%s, error=%s WHERE case_id=%s", row)
+            " evidence_count=%s, narrative=%s, evidence=%s, error=%s"
+            " WHERE case_id=%s", row)
         if isinstance(state, dict) and "verified" in state:
             await conn.execute(
                 "UPDATE cases SET verified=%s, escalated=%s, verification=%s"

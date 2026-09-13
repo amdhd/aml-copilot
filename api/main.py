@@ -29,6 +29,7 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS narrative jsonb;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS verified boolean;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS escalated boolean;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS verification jsonb;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS evidence jsonb;
 """
 
 app = FastAPI(title="AML Investigation Copilot")
@@ -81,14 +82,54 @@ async def get_case(case_id: str):
     async with await psycopg.AsyncConnection.connect(DSN) as conn:
         row = await (await conn.execute(
             "SELECT case_id, alert_id, status, typology, confidence, reasoning,"
-            " evidence_count, error, narrative, verified, escalated, verification"
+            " evidence_count, error, narrative, verified, escalated, verification,"
+            " evidence"
             " FROM cases WHERE case_id = %s", (case_id,))).fetchone()
     if row is None:
         raise HTTPException(404, "no such case")
     keys = ("case_id", "alert_id", "status", "typology", "confidence",
             "reasoning", "evidence_count", "error", "narrative", "verified",
-            "escalated", "verification")
+            "escalated", "verification", "evidence")
     return dict(zip(keys, (str(row[0]), *row[1:])))
+
+
+@app.get("/cases/{case_id}/subgraph")
+async def subgraph(case_id: str):
+    """The GNN neighbourhood behind this case, shaped for a force graph.
+
+    risk_score is only known for transactions the model alerted on; a neighbour
+    that scored below the threshold is not in the alerts table and comes back
+    null. Scoring one here would mean loading the graph and the GAT into the API
+    process, which is the worker's job -- see section 8.
+    """
+    async with await psycopg.AsyncConnection.connect(DSN) as conn:
+        row = await (await conn.execute(
+            "SELECT evidence FROM cases WHERE case_id = %s", (case_id,))).fetchone()
+        if row is None:
+            raise HTTPException(404, "no such case")
+        if row[0] is None:
+            raise HTTPException(409, "case has no evidence yet")
+        evidence = row[0]
+
+        attention = {v["txn_id"]: v["attention_weight"] for v in evidence.values()
+                     if v["kind"] == "gnn_attention"}
+        alert_id = next(v["txn_id"] for v in evidence.values() if v["kind"] == "alert")
+        ids = sorted({*attention, alert_id})
+        rows = await (await conn.execute(
+            "SELECT t.txn_id, t.ts, t.src_account, t.dst_account, t.amount,"
+            " t.currency, a.risk_score FROM transactions t"
+            " LEFT JOIN alerts a ON a.txn_id = t.txn_id"
+            " WHERE t.txn_id = ANY(%s)", (ids,))).fetchall()
+
+    nodes = [{"txn_id": r[0], "timestamp": str(r[1]), "src_account": r[2],
+              "dst_account": r[3], "amount": float(r[4]), "currency": r[5],
+              "risk_score": None if r[6] is None else round(float(r[6]), 4),
+              "attention_weight": attention.get(r[0]),
+              "is_alert": r[0] == alert_id} for r in rows]
+    links = [{"source": alert_id, "target": n["txn_id"],
+              "value": n["attention_weight"]}
+             for n in nodes if not n["is_alert"] and n["attention_weight"] is not None]
+    return {"nodes": nodes, "links": links}
 
 
 @app.post("/cases/{case_id}/decision", status_code=202)
