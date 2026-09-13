@@ -27,7 +27,10 @@ jobs:
         # Generates its own 8k-row CSV in the IBM schema. No dataset, no
         # database, no provider key. Proves the pipeline executes; the numbers
         # it prints are not results.
-        run: make smoke
+        #
+        # UV is overridden because the Makefile hardcodes $(HOME)/.local/bin/uv;
+        # setup-uv installs into the tool cache and exposes it on PATH instead.
+        run: make smoke UV="PYTHONUNBUFFERED=1 uv"
 
   api:
     name: API schema and startup
@@ -63,17 +66,18 @@ jobs:
           enable-cache: true
       - run: uv sync --frozen
 
-      - name: Start the API
+      # Start and assert in one step: a backgrounded uvicorn that outlives its
+      # step keeps the uv cache open and the post-job prune then fails.
+      - name: API starts and applies its schema
         run: |
+          trap 'pkill -f "uvicorn api.main:app" || true' EXIT
           uv run uvicorn api.main:app --port 8000 &
           for _ in $(seq 1 60); do
-            curl -sf http://localhost:8000/docs >/dev/null && exit 0
+            curl -sf http://localhost:8000/docs >/dev/null && break
             sleep 2
           done
-          echo "API did not become ready"; exit 1
-
-      - name: Startup applied the cases schema
-        run: |
+          curl -sf http://localhost:8000/docs >/dev/null \
+            || { echo "API did not become ready"; exit 1; }
           uv run python - <<'EOF'
           import os, sys, psycopg
           with psycopg.connect(os.environ["AML_DSN"]) as conn:
