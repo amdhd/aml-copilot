@@ -42,7 +42,7 @@ def draft_narrative(state: dict) -> dict:
         + "\nEVIDENCE BUNDLE — cite only these ids\n"
         + json.dumps(facts, indent=1, default=str))
 
-    narrative, usage = complete_json(SYSTEM, case_data, Narrative, max_tokens=900)
+    narrative, usage = complete_json(SYSTEM, case_data, Narrative, max_tokens=8000)
     return {
         "narrative": [s.model_dump() for s in narrative.sentences],
         "draft_attempts": state.get("draft_attempts", 0) + 1,

@@ -588,6 +588,124 @@ Reverted to `HISTORY_LIMIT = 25`; the run containing the 413 was not kept as
 `eval_results.json`, since a provider error in the file corrupts the citation
 denominator that the README quotes.
 
+#### Hypothesis (4) confirmed: node 1 gathered the wrong account (2026-09-13)
+
+Node 1 built its history from `src` twice — `WHERE src_account = %s OR dst_account
+= %s` with `(src, src, ...)`. The alerted transaction's counterparty was never
+gathered. Fixture 4987170 is the case that proves it matters: the alert is
+`128590-80ADBB8A0 -> 15-803DE4A90`, and the smurfing pattern the label refers to
+sits on the **destination**. The bundle held the sender's 23 transactions and none
+of the 40 on the receiving account. The model answered `none`, which given that
+evidence is arguably right.
+
+Changed the query to span both endpoints. Bundle for 4987170 went 23 -> 63, and the
+classifier's own reasoning now reads "Account 15-803DE4A90 acts as a hub: it
+receives large Yen inflows from many distinct accounts ... and then sends funds to
+numerous external accounts" — the accumulate-then-disperse pattern, described from
+transactions that were physically absent before. It still mislabels it (`smurfing`
+expected), but it stopped refusing to classify.
+
+Direction had to change with it. `"outgoing" if h[2] == src` was correct only while
+history covered one account; with both endpoints it labels every outbound transfer
+from the destination as "incoming". Direction is now relative to whichever endpoint
+the transaction touches, and each entry carries an `account` field naming it.
+
+Run against `deepseek-flash`, both endpoints, `HISTORY_LIMIT = 100`:
+
+| Metric | Groq, src-only | DeepSeek, both ends |
+|---|---|---|
+| Typology accuracy | 2/8 (25%) | 3/8 (38%) |
+| Narratives drafted | 3/8 | **6/8** |
+| Citation validity | 100.0% (49/49) | **100.0% (165/165)** |
+| Hallucinated entities | 0 | 0 |
+| Classified `none` | **5 of 8** | **1 of 8** |
+| p50 / p95 latency | 21.6s / 82.0s | 44.7s / 60.6s |
+| Tokens per case | 4,108 in, 450 out | 7,374 in, 3,249 out |
+| Provider errors | 0 | 1 |
+
+**Do not quote the accuracy number.** One fixture of movement on a provider that is
+not deterministic (below), from a single run of eight. The two results large enough
+to survive that: the `none` collapse cleared 5 -> 1, and citation validity now rests
+on 165 citations across 6 narratives instead of 49 across 3. §13's standing caveat
+that the thesis is measured on 3 narratives is much weaker than it was.
+
+Three variables moved at once — evidence, provider, token budget — but the
+per-fixture detail separates them:
+
+| alert | bundle | outcome | attributable to |
+|---|---|---|---|
+| 4987170 | 23 -> 63 | `none` -> `rapid_movement`, still wrong | evidence |
+| 5077454 | 25 -> 26 | `none` -> `layering`, **fixed** | provider/budget, not evidence |
+| 5077604 | 4 -> 8 | `none` -> `rapid_movement`, **fixed** | confounded |
+| 5077723 | 5 -> 5 | unchanged, wrong | prompt — bundle identical |
+| 5077772 | 4 -> 4 | unchanged, wrong | prompt — bundle identical |
+| 4385373 | 2 -> 8 | `none` -> `layering`, **broke** | evidence |
+
+**The cost of the fix is a false positive, and it lands on the only true negative in
+the set.** 4385373 is two recurring ~100 USD payments a week apart. Pulling in the
+counterparty's six transactions gave the model enough benign activity to read as
+layering. In AML the false-positive direction is the expensive one — it is what
+drowns a compliance team — and the fixture set has exactly one case that tests it.
+Before judging this change, the set needs more true negatives.
+
+The two fixtures whose bundles could not change are the two where `src == dst`, and
+both are still wrong. Evidence held constant, provider and budget varied, answer the
+same. That isolates them to hypothesis (1) — the system prompt's "same-account
+transfers are routine bookkeeping" clause, which 5077723 was deliberately built to
+probe.
+
+5077931 classified but failed drafting: the model wrote an 8th sentence past the
+300-char `NarrativeSentence.text` cap, twice. The cap was left alone — relaxing it
+changes what the verifier operates on.
+
+Measured cost: ~59k in / ~26k out per run, about $0.025 off-peak on `deepseek-flash`.
+
+#### Reasoning models break "the provider is a config change"
+
+`.env.example` claims Groq / Gemini / DeepSeek / local vLLM are a base_url and a
+model name with no code change. That is false for a reasoning model.
+
+`deepseek-flash` emits `reasoning_content` and **bills it against `max_tokens`**.
+The 400/900 budgets set for Groq's 1000 tok/min free-tier cap left nothing for the
+answer: the response came back with `finish_reason: length`, ~3,380 tokens of
+chain-of-thought, and `content` as an **empty string**. The schema layer then
+reported `Invalid JSON: EOF while parsing` — a parse error three layers from the
+cause, and the retry hit the identical wall. Two full runs were aborted before the
+cause was visible.
+
+Raised to 8000 for both nodes. `max_tokens` is a cap, not a reservation — unused
+headroom is not billed — so there was never a reason to raise it incrementally.
+
+Two consequences worth stating:
+
+**A cramped budget degrades the answer, not just the parse.** At 2000, fixture
+5077604 classified `layering`; at 8000, same evidence and same `temperature=0`, it
+classified `rapid_movement` — correctly. A truncated chain of thought reaches a
+worse conclusion before it reaches a broken one.
+
+**The config is now DeepSeek-only.** 8000 exceeds Groq's free-tier output cap, so
+switching back re-breaks what the 400/900 values existed to avoid. Provider
+portability costs a per-provider token budget; it is not free.
+
+Worth adding to `complete_json`: check `finish_reason == "length"` and raise
+something that names truncation. The current failure mode is expensive to diagnose.
+
+#### The LLM path is not deterministic at temperature=0
+
+Fixture 4987170, identical evidence bundle, `temperature=0`, `max_tokens=8000`,
+same model: `layering` in an isolated call, `rapid_movement` inside the harness run
+minutes later.
+
+The README says runs are deterministic. That is true of the GNN — fixed seeds in
+torch and numpy, two runs reproduce bit-identically — and **not** true of anything
+downstream of an LLM call. An 8-fixture eval read as a single point estimate wobbles
+by at least one fixture on resampling alone.
+
+Consequence for the harness: a ±1 accuracy difference is noise. Any typology number
+worth quoting needs 3-5 runs and a range, not one run and a percentage. Citation
+validity is more robust — it is a property of every sentence drafted, so it
+aggregates over 165 observations rather than 8.
+
 #### Citation validity and usefulness remain independent
 
 Worth restating with numbers now: the run scoring 100% citation validity also scored

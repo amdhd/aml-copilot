@@ -37,14 +37,14 @@ def _usage(response) -> dict:
 
 
 def complete_json(system: str, case_data: str, schema: type[BaseModel],
-                  max_tokens: int = 400):
+                  max_tokens: int = 8000):
     """One retry on invalid JSON. A second failure raises -- no silent fallback."""
     messages = [{"role": "system", "content": system},
                 {"role": "user", "content": case_data}]
     for attempt in range(2):
         response = client().chat.completions.create(
             model=MODEL, messages=messages, temperature=0,
-            max_tokens=max_tokens,          # free tiers cap output tokens/minute
+            max_tokens=max_tokens,          # reasoning models spend this on CoT too
             response_format={"type": "json_object"})
         raw = response.choices[0].message.content
         try:
