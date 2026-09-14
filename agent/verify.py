@@ -10,13 +10,13 @@ import re
 
 # Accounts in this dataset are "<bank>-<hex account>", e.g. 14766-805C42580.
 # Anything of that shape appearing in narrative prose is a claim about an entity.
-ACCOUNT = re.compile(r"\b\d{1,6}-[0-9A-F]{6,12}\b")
+ACCOUNT = re.compile(r"\b\d{1,6}-[0-9A-Fa-f]{6,12}\b")
 MAX_ATTEMPTS = 2
 
 
 def verify_citations(state: dict) -> dict:
     evidence = state["evidence"]
-    known = {fact[key] for fact in evidence.values()
+    known = {fact[key].upper() for fact in evidence.values()
              for key in ("src_account", "dst_account") if key in fact}
 
     unresolved, hallucinated = [], []
@@ -25,7 +25,7 @@ def verify_citations(state: dict) -> dict:
             if evidence_id not in evidence:
                 unresolved.append({"sentence": index, "evidence_id": evidence_id})
         for account in ACCOUNT.findall(sentence["text"]):
-            if account not in known:
+            if account.upper() not in known:
                 hallucinated.append({"sentence": index, "account": account})
 
     attempts = state.get("draft_attempts", 1)
