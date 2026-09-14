@@ -34,6 +34,7 @@ def _status(state: dict) -> str:
 async def run_case(ctx, case_id: str, alert_id: int, decision: str | None = None):
     payload = (Command(resume=decision) if decision
                else {"case_id": case_id, "alert_id": alert_id})
+    state = None                       # bound on the failure path too
     try:
         state = await asyncio.to_thread(_invoke, case_id, payload)
         row = (_status(state), state["typology"], state["confidence"],
