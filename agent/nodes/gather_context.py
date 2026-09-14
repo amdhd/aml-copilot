@@ -50,11 +50,14 @@ def gather_context(state: dict) -> dict:
             "gnn_risk_score": round(float(risk), 4), "split": split,
         }
 
+        # History is strictly prior transactions, most recent first. Ordering by
+        # absolute time distance would pull in transactions after the alert too,
+        # letting the evidence bundle cite transfers that had not yet occurred.
         history = conn.execute(
             "SELECT txn_id, ts, src_account, dst_account, amount, currency, "
             "payment_format FROM transactions "
-            "WHERE src_account IN (%s, %s) OR dst_account IN (%s, %s) "
-            "ORDER BY abs(extract(epoch FROM ts - %s)) LIMIT %s",
+            "WHERE (src_account IN (%s, %s) OR dst_account IN (%s, %s)) AND ts < %s "
+            "ORDER BY ts DESC LIMIT %s",
             (src, dst, src, dst, ts, HISTORY_LIMIT)).fetchall()
 
     for h in history:
