@@ -2,11 +2,12 @@
 and later waits at a human gate, so the request cannot block on it."""
 
 import os
+import uuid
 
 import psycopg
 from arq import create_pool
 from arq.connections import RedisSettings
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from typing import Literal
 
 from pydantic import BaseModel
@@ -43,6 +44,16 @@ class Decision(BaseModel):
     decision: Literal["approved", "rejected"]
 
 
+def _valid_case_id(raw: str) -> str:
+    """Reject a malformed id before it reaches Postgres, where an invalid uuid
+    would raise a 500 instead of a clean 404."""
+    try:
+        uuid.UUID(raw)
+    except ValueError:
+        raise HTTPException(404, "no such case")
+    return raw
+
+
 @app.on_event("startup")
 async def startup():
     app.state.redis = await create_pool(
@@ -52,7 +63,7 @@ async def startup():
 
 
 @app.get("/alerts")
-async def alerts(limit: int = 20):
+async def alerts(limit: int = Query(20, ge=1, le=1000)):
     """The queue, highest model risk first. Test split only: train-period scores
     are in-sample and not honest."""
     async with await psycopg.AsyncConnection.connect(DSN) as conn:
@@ -81,6 +92,7 @@ async def create_case(body: CaseRequest):
 
 @app.get("/cases/{case_id}")
 async def get_case(case_id: str):
+    _valid_case_id(case_id)
     async with await psycopg.AsyncConnection.connect(DSN) as conn:
         row = await (await conn.execute(
             "SELECT case_id, alert_id, status, typology, confidence, reasoning,"
@@ -104,6 +116,7 @@ async def subgraph(case_id: str):
     null. Scoring one here would mean loading the graph and the GAT into the API
     process, which is the worker's job -- see section 8.
     """
+    _valid_case_id(case_id)
     async with await psycopg.AsyncConnection.connect(DSN) as conn:
         row = await (await conn.execute(
             "SELECT evidence FROM cases WHERE case_id = %s", (case_id,))).fetchone()
@@ -115,7 +128,10 @@ async def subgraph(case_id: str):
 
         attention = {v["txn_id"]: v["attention_weight"] for v in evidence.values()
                      if v["kind"] == "gnn_attention"}
-        alert_id = next(v["txn_id"] for v in evidence.values() if v["kind"] == "alert")
+        alert = next((v for v in evidence.values() if v["kind"] == "alert"), None)
+        if alert is None:
+            raise HTTPException(500, "case evidence has no alert fact")
+        alert_id = alert["txn_id"]
         ids = sorted({*attention, alert_id})
         rows = await (await conn.execute(
             "SELECT t.txn_id, t.ts, t.src_account, t.dst_account, t.amount,"
@@ -138,6 +154,7 @@ async def subgraph(case_id: str):
 async def decide(case_id: str, body: Decision):
     """Resume a run parked at the human gate. The graph has been waiting in
     Postgres since the interrupt, however long that took."""
+    _valid_case_id(case_id)
     async with await psycopg.AsyncConnection.connect(DSN, autocommit=True) as conn:
         row = await (await conn.execute(
             "SELECT status, alert_id FROM cases WHERE case_id = %s", (case_id,))).fetchone()
