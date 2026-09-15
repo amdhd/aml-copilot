@@ -95,16 +95,20 @@ def test_prose_that_is_not_an_account_is_left_alone(text):
     assert verify_citations(state)["hallucinated_entities"] == []
 
 
-def test_lowercase_account_is_not_detected():
-    """Documents a real gap rather than asserting desired behaviour.
-
-    ACCOUNT is [0-9A-F], so an account the model wrote in lowercase slips past
-    the hallucination check. Every account in this dataset is uppercase, so it
-    has never fired in practice -- but it is a false negative in the check the
-    project rests on, and it would be invisible without this test.
-    """
+def test_lowercase_account_is_detected():
+    """A case-variant of an entity id is still an entity claim, so a lowercase
+    account the model invented is caught the same as an uppercase one."""
     state = {"evidence": bundle(("14766-805C42580", "1299-8010F8CE0")),
              "narrative": [sentence("Funds moved to 99999-deadbeef.", "txn:0")]}
+    assert verify_citations(state)["hallucinated_entities"] == [
+        {"sentence": 0, "account": "99999-deadbeef"}]
+
+
+def test_real_account_written_in_lowercase_is_not_hallucinated():
+    """Comparison is case-insensitive: the same account in a different case is
+    not a hallucination."""
+    state = {"evidence": bundle(("14766-805C42580", "1299-8010F8CE0")),
+             "narrative": [sentence("Funds moved to 14766-805c42580.", "txn:0")]}
     assert verify_citations(state)["hallucinated_entities"] == []
 
 
