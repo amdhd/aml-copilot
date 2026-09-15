@@ -81,4 +81,4 @@ def gather_context(state: dict) -> dict:
         "neighbourhood_size": ex["subgraph_size"],
     }
 
-    return {"evidence": evidence, "entity": src}
+    return {"evidence": evidence}
