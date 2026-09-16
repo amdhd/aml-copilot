@@ -58,10 +58,12 @@ async def alerts(limit: int = 20):
     async with await psycopg.AsyncConnection.connect(DSN) as conn:
         rows = await (await conn.execute(
             "SELECT txn_id, ts, src_account, dst_account, amount, currency,"
-            " payment_format, risk_score, is_laundering FROM alerts"
+            " payment_format, risk_score FROM alerts"
             " WHERE split = 'test' ORDER BY risk_score DESC LIMIT %s", (limit,))).fetchall()
+    # is_laundering is the ground-truth label; exposing it would hand the demo
+    # analyst the answer the investigation is supposed to find.
     keys = ("alert_id", "timestamp", "src_account", "dst_account", "amount",
-            "currency", "payment_format", "risk_score", "is_laundering")
+            "currency", "payment_format", "risk_score")
     return [dict(zip(keys, r)) for r in rows]
 
 
