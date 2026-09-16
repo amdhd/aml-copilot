@@ -50,15 +50,23 @@ def gather_context(state: dict) -> dict:
             "gnn_risk_score": round(float(risk), 4), "split": split,
         }
 
-        # History is strictly prior transactions, most recent first. Ordering by
-        # absolute time distance would pull in transactions after the alert too,
-        # letting the evidence bundle cite transfers that had not yet occurred.
+        # History is prior transactions, most recent first. Ordering by absolute
+        # time distance would pull in transactions after the alert too, letting
+        # the bundle cite transfers that had not yet occurred.
+        #
+        # The bound is inclusive: a transfer in the same minute is simultaneous,
+        # not future, and several typologies turn on exactly that pairing -- a
+        # same-account conversion leg booked alongside its outbound. The alerted
+        # transaction is excluded by id instead, since it is already in the
+        # bundle as the alert fact. Ties break on txn_id so a LIMIT that cuts
+        # through one timestamp is reproducible.
         history = conn.execute(
             "SELECT txn_id, ts, src_account, dst_account, amount, currency, "
             "payment_format FROM transactions "
-            "WHERE (src_account IN (%s, %s) OR dst_account IN (%s, %s)) AND ts < %s "
-            "ORDER BY ts DESC LIMIT %s",
-            (src, dst, src, dst, ts, HISTORY_LIMIT)).fetchall()
+            "WHERE (src_account IN (%s, %s) OR dst_account IN (%s, %s)) "
+            "AND ts <= %s AND txn_id <> %s "
+            "ORDER BY ts DESC, txn_id DESC LIMIT %s",
+            (src, dst, src, dst, ts, txn_id, HISTORY_LIMIT)).fetchall()
 
     for h in history:
         # History now spans both endpoints, so direction has to be relative to
