@@ -48,7 +48,8 @@ def main():
     args = ap.parse_args()
 
     model_path = args.model or f"artifacts/model-{Path(args.csv).stem}.pt"
-    ckpt = torch.load(model_path, weights_only=False)
+    # Self-generated checkpoint (train.py); not untrusted input.
+    ckpt = torch.load(model_path, weights_only=False)  # nosec B614
     data = load(args.csv)
     model = GAT(ckpt["in_dim"], ckpt["hidden"])
     model.load_state_dict(ckpt["state_dict"])

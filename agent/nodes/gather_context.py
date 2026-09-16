@@ -22,7 +22,8 @@ _cache: dict = {}
 def _gnn():
     """Graph and model are loaded once per worker, not once per case."""
     if not _cache:
-        ckpt = torch.load("artifacts/model-HI-Small_Trans.pt", weights_only=False)
+        # Self-generated checkpoint (train.py); not untrusted input.
+        ckpt = torch.load("artifacts/model-HI-Small_Trans.pt", weights_only=False)  # nosec B614
         model = GAT(ckpt["in_dim"], ckpt["hidden"])
         model.load_state_dict(ckpt["state_dict"])
         model.eval()

@@ -77,7 +77,9 @@ def load(csv_path: str, max_rows: int | None = None) -> Data:
     # Building 61M edges over 5M rows takes minutes; every run reuses the cache.
     cache = Path(csv_path).with_suffix(f".{max_rows}.graph.pt")
     if cache.exists():
-        return torch.load(cache, weights_only=False)
+        # Self-generated graph cache; weights_only=True cannot load a PyG Data
+        # object, and the file is never untrusted input.
+        return torch.load(cache, weights_only=False)  # nosec B614
 
     df = pd.read_csv(csv_path, nrows=max_rows)
     df["Timestamp"] = pd.to_datetime(df["Timestamp"], format="%Y/%m/%d %H:%M")
