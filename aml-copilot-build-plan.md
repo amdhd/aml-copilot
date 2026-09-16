@@ -484,6 +484,74 @@ Things learned by building it that were not knowable from the plan.
 
 ---
 
+### Week 6 — the evidence horizon
+
+#### Detection time or investigation time: the bundle now answers this, and the answer was never argued for (2026-09-16)
+
+Node 1 ordered account history by `abs(ts - alert_ts)`, nearest first. That takes
+the closest transactions in *either* direction, so the evidence bundle contained
+transactions that had not happened when the alert fired. Not a rounding error:
+restricting to prior history cut 4987170's bundle from 63 transactions to 27 and
+5077931's from 42 to 19. **More than half of what the classifier saw on the
+laundering hub account was the future.**
+
+Fixed, with one correction. The first fix used `ts < alert_ts`, which also drops
+transactions sharing the alert's timestamp — seven of eight fixtures lose at
+least one, and for 5077723 the two dropped rows are 5077724 and 5077725, the
+same-minute Euro outbound its `layering` label is *defined* by. Four fixture
+rationales name a same-minute pairing explicitly. A transfer in the same minute
+is simultaneous, not future. The bound is inclusive and the alerted transaction
+is excluded by id, which also stopped it being duplicated as a `txn:` fact
+alongside its own `alert:` fact.
+
+**The part worth arguing about.** Removing the lookahead silently answered a
+design question the project had not asked: *what information set is an evidence
+bundle supposed to represent?*
+
+- **Detection time.** What was knowable when the alert fired. Defensible in a
+  compliance review — the narrative cannot cite a transfer that had not yet
+  occurred — and consistent with the temporal-split discipline the GNN is held
+  to in §4.
+- **Investigation time.** What an analyst sees opening the case days later,
+  which is the whole account including everything after the alert. This is how
+  SAR investigations actually work, and it is how the fixtures were labelled.
+
+The repo now implements detection time. The fixtures assume investigation time.
+4987170 is labelled `smurfing` on "twelve small incoming deposits ... before any
+outflow", and the alerted transaction is one of the deposits — so the dispersal
+that makes the pattern laundering is entirely after it. Under the current rule
+the classifier is being asked to name a pattern it structurally cannot see. That
+is not a bug in either the code or the label; it is the two horizons disagreeing.
+
+**The bundle is now internally inconsistent about this.** `txn:` facts are
+strictly prior; `gnn:` facts are not. The edge rule in §4 links transactions
+adjacent in time on an account "up to 3 positions apart **in either
+direction**", so attention neighbours can post-date the alert. `ml/dataset.py`
+sorts by timestamp and resets the index, so node id order is time order — and
+for alert 5077454 the neighbour `5077486` is 32 positions later, carrying the
+second-highest attention weight in that case. It is in the bundle as a `gnn:`
+fact, available to be cited, while a `txn:` fact from the same moment would have
+been filtered out.
+
+So one of these is true and the project should say which:
+
+1. Detection time is right, and the GNN subgraph needs the same filter — which
+   means retraining, because the edge rule is baked into the graph.
+2. Investigation time is right, and the SQL filter should be relaxed back to
+   bounded lookahead, keeping only the ordering and self-exclusion fixes.
+
+Option 1 is the more defensible story and much the more expensive: the graph
+cache and the 2h42m training run both assume bidirectional adjacency. Option 2
+is a comment and a `WHERE` clause.
+
+**Unmeasured.** The eval was not re-run after this change: the DeepSeek account
+is out of balance (402, granted_balance 0.00 — the "free signup grant" reported
+by pricing aggregators does not exist on it). The last recorded run predates the
+horizon change and is no longer a fair baseline for 4987170 or 5077931, whose
+bundles more than halved. Structural verification did pass without a provider:
+zero post-alert `txn:` facts across all eight fixtures, no alert present in its
+own history, 5077723's pair restored.
+
 ### Week 5 — verifier, human gate, evals
 
 #### The thesis holds, but on a smaller sample than the number suggests
