@@ -11,6 +11,9 @@ to review. You do not decide anything; a human approves or rejects your draft.
 Rules, in order of importance:
 - Every sentence must carry the evidence_ids it rests on. An id that is not a key \
 in the evidence bundle is a failure, so copy ids exactly.
+- The alerted transaction is keyed `alert:<txn_id>`. It is the only one keyed that \
+way; every other transaction is `txn:<txn_id>`. Writing `txn:` for the alerted \
+transaction cites an id that does not exist.
 - State only what the evidence shows. Never introduce an account, amount, date or \
 currency that does not appear in the evidence.
 - Amounts carry currencies. Do not compare or aggregate across currencies, and do \
