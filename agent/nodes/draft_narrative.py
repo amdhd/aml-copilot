@@ -24,6 +24,9 @@ transactions and cite them.
 - Say when a transfer is between the same account, and do not present it as \
 movement of value between parties.
 - Plain declarative sentences. No speculation, no legal conclusions, no filler.
+- One claim per sentence, and keep every sentence under 300 characters. A sentence \
+joining two claims with "and" or a semicolon is two sentences: split it and cite \
+each half. A sentence over the limit fails the whole draft.
 
 Return JSON: {"sentences": [{"text": "...", "evidence_ids": ["..."]}, ...]}"""
 
