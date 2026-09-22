@@ -1,0 +1,25 @@
+# An allowlist, not a denylist. data/ holds a 475MB CSV and a 1.84GB graph
+# cache; a missed pattern would put either into the build context and every
+# build would crawl. Everything is excluded, then the image's actual inputs are
+# named back in.
+*
+
+!pyproject.toml
+!uv.lock
+
+!agent
+!api
+!ml
+!rag
+!scripts
+!config.py
+!db.py
+!artifacts.py
+
+# 122KB checkpoint (section 2: the model artifact is baked) and 97KB of seed
+# data. The 1.84GB graph is deliberately absent -- AML_GRAPH_S3, see artifacts.py.
+!artifacts/model-HI-Small_Trans.pt
+!data/seed
+
+**/__pycache__
+**/*.pyc

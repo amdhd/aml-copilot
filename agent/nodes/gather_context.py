@@ -9,7 +9,8 @@ import numpy as np
 import psycopg
 import torch
 
-from ml.dataset import load
+from artifacts import ensure
+from ml.dataset import cache_path, load
 from ml.explain import explain_transaction
 from ml.model import GAT
 from db import DSN
@@ -27,6 +28,8 @@ def _gnn():
         model = GAT(ckpt["in_dim"], ckpt["hidden"])
         model.load_state_dict(ckpt["state_dict"])
         model.eval()
+        # The graph is not in the image; deployed it comes from S3.
+        ensure(cache_path(CSV), "AML_GRAPH_S3")
         _cache["data"], _cache["model"] = load(CSV, categories=ckpt["categories"]), model
     return _cache["data"], _cache["model"]
 

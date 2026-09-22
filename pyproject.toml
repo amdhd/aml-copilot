@@ -18,6 +18,9 @@ dependencies = [
     "openai>=3.8.0",
     "sentence-transformers>=6.0.1",
     "pgvector>=0.5.0",
+    # Only to pull the graph cache from S3 at worker start (artifacts.py). The
+    # image cannot carry a 1.84GB layer that the API service also pulls.
+    "boto3>=1.35",
 ]
 
 [dependency-groups]

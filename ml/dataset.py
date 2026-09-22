@@ -96,10 +96,16 @@ def _edge_index(df: pd.DataFrame) -> torch.Tensor:
     return torch.from_numpy(both).long()
 
 
+def cache_path(csv_path: str, max_rows: int | None = None) -> Path:
+    """Where load() keeps the built graph. Deployed, the worker fetches this
+    path from S3 rather than building it -- see artifacts.ensure."""
+    return Path(csv_path).with_suffix(f".{max_rows}.graph.pt")
+
+
 def load(csv_path: str, max_rows: int | None = None,
          categories: list[str] | None = None) -> Data:
     # Building 61M edges over 5M rows takes minutes; every run reuses the cache.
-    cache = Path(csv_path).with_suffix(f".{max_rows}.graph.pt")
+    cache = cache_path(csv_path, max_rows)
     if cache.exists():
         # Self-generated graph cache; weights_only=True cannot load a PyG Data
         # object, and the file is never untrusted input.
