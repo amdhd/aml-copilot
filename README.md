@@ -23,45 +23,53 @@ eight disagree with it). Provider `deepseek-flash` on DeepSeek.
 
 | Metric | Target | Result |
 |---|---|---|
-| Typology accuracy | report | **3/8 (38%)** |
-| Citation validity | **100%** | **100.0% (165/165)** |
+| Typology accuracy | report | **4/8 (50%)** |
+| Citation validity | **100%** | **100.0% (158/158)** |
 | Hallucinated entities | **0** | **0** |
 | Escalated after retry | report | 0 |
-| Provider errors | report | 1 |
-| p50 / p95 latency | report | 44.7s / 60.6s |
-| Tokens per case | report | 7,374 in, 3,249 out |
-| Prompt cache hit rate | report | 74.2% |
+| Provider errors | report | **0** |
+| p50 / p95 latency | report | 41.7s / 50.8s |
+| Tokens per case | report | 6,620 in, 4,387 out |
+| Prompt cache hit rate | report | 58.0% |
 
-**Read these two numbers together.** Deterministic verification works: across 165
+**Read these two numbers together.** Deterministic verification works: across 158
 citations in 6 narratives, every `evidence_id` in every drafted sentence resolved to a
 fact the pipeline actually assembled, and no narrative named an account outside the
-evidence bundle. But the same run classified the typology correctly only three times in
+evidence bundle. But the same run classified the typology correctly only four times in
 eight. **A perfectly cited narrative about the wrong typology is a perfectly cited wrong
 answer.** The verifier proves the narrative rests on real evidence; it proves nothing
 about whether the conclusion is right.
 
-The 74.2% cache hit rate is the one design decision that measured cleanly: §5 builds
-every prompt `[system][case data]` with no interleaving, and the stable prefix hits.
+This is the first run in which all eight fixtures completed with no provider error.
+
+The cache hit rate is the one design decision that measured cleanly: §5 builds every
+prompt `[system][case data]` with no interleaving, and the stable prefix hits. It moves
+run to run with how much evidence each case carries — 74.2% on the previous run, 58.0%
+here — so treat it as a working mechanism rather than a fixed figure.
 
 Caveats that belong with the table:
 
 - **The typology number is not reproducible to ±1.** The provider is not deterministic
   at `temperature=0` — one fixture returned three different typologies across three
-  samples of identical input. 3/8 is a single draw, not a measurement. Quote it with a
-  range across runs or not at all.
-- **Confidence is not calibrated, and here it inverts.** The three correct answers came
-  back at 0.60, 0.62 and 0.70; the four wrong ones at 0.68–0.78. The most confident
-  answer in the run is wrong. Confidence cannot be used for triage.
-- **One fixture produced no narrative.** 5077931 classified, then failed drafting twice
-  by writing a sentence past the 300-character cap. 165/165 covers the six cases that
-  drafted; the eighth never reached the verifier.
-- **Latency is the reasoning model, not throttling.** `deepseek-flash` spends roughly
-  3,400 tokens on chain-of-thought per classification. That is why output tokens are 7x
-  an earlier Groq run and p50 doubled.
+  samples of identical input, and between the last two runs two fixtures swapped one
+  wrong answer for another without any change in their evidence. 4/8 is a single draw,
+  not a measurement. Quote it with a range across runs or not at all.
+- **Confidence is not calibrated; it is inverted.** Sorted by the model's own
+  confidence, the top three answers (0.82, 0.80, 0.70) are all wrong and the next four
+  (0.65, 0.62, 0.62, 0.60) are all right. **Every answer above 0.65 was wrong.**
+  Confidence cannot be used for triage, and the UI labels it as such.
+- **Two fixtures produced no narrative,** both by classifying `none` and
+  short-circuiting before drafting. 158/158 covers the six cases that drafted.
+- **Latency is the reasoning model, not throttling.** `deepseek-flash` spends thousands
+  of tokens on chain-of-thought per call, which is why output tokens exceed an earlier
+  Groq run several times over.
 
 The per-node token budgets (8,000) are sized for a model that bills chain-of-thought
 against `max_tokens`. They exceed Groq's free-tier output cap — read §13 before
 switching providers.
+
+Evidence history is restricted to transactions at or before the alert. §13 records why,
+and the open question that choice raises.
 
 ---
 

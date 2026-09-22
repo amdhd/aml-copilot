@@ -486,6 +486,59 @@ Things learned by building it that were not knowable from the plan.
 
 ### Week 6 — the evidence horizon
 
+#### The horizon change cost nothing and fixed one thing, for a traceable reason (2026-09-22)
+
+Re-ran the harness after the evidence horizon moved to prior-only. Typology went
+3/8 to 4/8, and **the entire gain is one fixture, by a mechanism rather than a
+lucky sample.**
+
+| alert | expected | before | after | |
+|---|---|---|---|---|
+| 5077931 | layering | `RuntimeError` | **layering** | **fixed** |
+| 5077723 | layering | rapid_movement | none | reshuffled |
+| 4987170 | smurfing | rapid_movement | layering | reshuffled |
+| the other five | | | | identical |
+
+5077931 used to fail drafting by writing an eighth sentence past the 300-char
+`NarrativeSentence.text` cap, twice. Restricting history to prior transactions
+cut its bundle from 42 transactions to 19; the narrative got shorter and stopped
+tripping the cap. The sentence cap is not fixed — this case just stopped
+reaching it. **Provider errors went 1 to 0: the first run in which all eight
+fixtures completed.**
+
+The two reshuffles are the non-determinism, not progress. Their evidence did not
+change between runs and their answers did. Anyone reading 3/8 -> 4/8 as a trend
+is reading noise plus one real fix.
+
+Citation validity held at 100% across 158 citations in 6 narratives. The two
+that drafted nothing both classified `none` and short-circuited, which is the
+design working, not a failure.
+
+#### Confidence is not merely uncalibrated, it is inverted
+
+Worth restating with this run's numbers, because it is sharper than "not
+calibrated" and it constrains the UI.
+
+| confidence | outcome |
+|---|---|
+| 0.82, 0.80, 0.70 | all **wrong** |
+| 0.65, 0.62, 0.62, 0.60 | all **right** |
+| 0.52 | wrong |
+
+**Every answer above 0.65 was wrong.** The four correct ones sit in a tight
+0.60-0.65 band. A triage rule of "review the low-confidence ones first" would
+beat the obvious one on this sample. That is almost certainly not a stable
+signal to exploit, and it is a hard argument against surfacing confidence as
+anything an analyst can act on. The UI shows the number and labels it unusable
+rather than hiding it, because hiding it invites someone to ask for it later.
+
+#### The cache hit rate moves with evidence size
+
+74.2% on the previous run, 58.0% on this one, with no prompt-construction change
+between them. The prefix-stable build in §5 works; the ratio just tracks how much
+per-case evidence sits after the stable prefix. Report the mechanism, not the
+number.
+
 #### Detection time or investigation time: the bundle now answers this, and the answer was never argued for (2026-09-16)
 
 Node 1 ordered account history by `abs(ts - alert_ts)`, nearest first. That takes
