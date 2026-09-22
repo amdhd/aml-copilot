@@ -27,7 +27,7 @@ def _gnn():
         model = GAT(ckpt["in_dim"], ckpt["hidden"])
         model.load_state_dict(ckpt["state_dict"])
         model.eval()
-        _cache["data"], _cache["model"] = load(CSV), model
+        _cache["data"], _cache["model"] = load(CSV, categories=ckpt["categories"]), model
     return _cache["data"], _cache["model"]
 
 

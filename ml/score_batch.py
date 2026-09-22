@@ -50,7 +50,7 @@ def main():
     model_path = args.model or f"artifacts/model-{Path(args.csv).stem}.pt"
     # Self-generated checkpoint (train.py); not untrusted input.
     ckpt = torch.load(model_path, weights_only=False)  # nosec B614
-    data = load(args.csv)
+    data = load(args.csv, categories=ckpt["categories"])
     model = GAT(ckpt["in_dim"], ckpt["hidden"])
     model.load_state_dict(ckpt["state_dict"])
 

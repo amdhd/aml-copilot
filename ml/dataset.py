@@ -20,7 +20,16 @@ NEIGHBORS = 3
 TRAIN_FRAC, VAL_FRAC = 0.70, 0.10
 
 
-def _features(df: pd.DataFrame) -> torch.Tensor:
+def _features(df: pd.DataFrame, categories: list[str] | None = None):
+    """Feature matrix, and the one-hot vocabulary it was built against.
+
+    The categorical width is a property of the data, not of the encoder: the
+    full CSV carries 7 payment formats and 15 currencies, a subset of it may
+    carry fewer, and `get_dummies` would then emit a narrower matrix whose
+    columns mean different things. Training records the vocabulary it fit; every
+    later load reindexes onto that exact list, so column k is the same category
+    it was at training time whatever the CSV happens to contain.
+    """
     paid = df["Amount Paid"].to_numpy(np.float32)
     recv = df["Amount Received"].to_numpy(np.float32)
     ts = df["Timestamp"]
@@ -39,8 +48,22 @@ def _features(df: pd.DataFrame) -> torch.Tensor:
     cats = pd.get_dummies(
         df[["Payment Format", "Payment Currency", "Receiving Currency"]],
         dtype=np.float32,
-    ).to_numpy()
-    return torch.from_numpy(np.column_stack([numeric, cats]).astype(np.float32))
+    )
+    if categories is None:
+        categories = list(cats.columns)
+    else:
+        unseen = [c for c in cats.columns if c not in set(categories)]
+        if unseen:
+            # A subset of the training CSV can only ever hold fewer categories.
+            # More means this is a different dataset, and the weights do not
+            # apply to it -- say so rather than encoding it into a zero column.
+            raise ValueError(
+                f"CSV has categories the model was not trained on: {unseen}")
+        # Categories absent here are genuinely absent from these rows; a zero
+        # column is the honest encoding, and reindex keeps the order fixed.
+        cats = cats.reindex(columns=categories, fill_value=np.float32(0))
+    x = np.column_stack([numeric, cats.to_numpy()]).astype(np.float32)
+    return torch.from_numpy(x), categories
 
 
 def _edge_index(df: pd.DataFrame) -> torch.Tensor:
@@ -73,13 +96,22 @@ def _edge_index(df: pd.DataFrame) -> torch.Tensor:
     return torch.from_numpy(both).long()
 
 
-def load(csv_path: str, max_rows: int | None = None) -> Data:
+def load(csv_path: str, max_rows: int | None = None,
+         categories: list[str] | None = None) -> Data:
     # Building 61M edges over 5M rows takes minutes; every run reuses the cache.
     cache = Path(csv_path).with_suffix(f".{max_rows}.graph.pt")
     if cache.exists():
         # Self-generated graph cache; weights_only=True cannot load a PyG Data
         # object, and the file is never untrusted input.
-        return torch.load(cache, weights_only=False)  # nosec B614
+        data = torch.load(cache, weights_only=False)  # nosec B614
+        # A cache built under a different vocabulary has columns that mean
+        # something else. There is no way to tell from the tensor alone, so the
+        # vocabulary rides along on the Data and a mismatch rebuilds rather than
+        # silently feeding the model misaligned features.
+        if categories is None or getattr(data, "categories", None) == categories:
+            return data
+        print(f"{cache.name} was built under a different one-hot vocabulary; "
+              f"rebuilding")
 
     df = pd.read_csv(csv_path, nrows=max_rows)
     df["Timestamp"] = pd.to_datetime(df["Timestamp"], format="%Y/%m/%d %H:%M")
@@ -97,14 +129,16 @@ def load(csv_path: str, max_rows: int | None = None) -> Data:
     split[int(n * TRAIN_FRAC):] = 1
     split[int(n * (TRAIN_FRAC + VAL_FRAC)):] = 2
 
+    x, categories = _features(df, categories)
     data = Data(
-        x=_features(df),
+        x=x,
         edge_index=_edge_index(df),
         y=torch.from_numpy(df["Is Laundering"].to_numpy(np.int64).copy()),
         train_mask=split == 0,
         val_mask=split == 1,
         test_mask=split == 2,
     )
+    data.categories = categories
     torch.save(data, cache)
     return data
 
