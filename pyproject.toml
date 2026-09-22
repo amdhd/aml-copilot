@@ -2,16 +2,14 @@
 name = "aml-copilot"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
+# What the api and worker containers import. Verified by importing both entry
+# points and reading sys.modules, not by reasoning about it.
 dependencies = [
     "torch>=2.5",
     "torch-geometric>=2.6",
     "pandas>=2.2",
     "numpy>=2.0",
-    "scikit-learn>=1.5",
-    "xgboost>=2.1",
     "psycopg[binary]>=3.3.5",
-    "shap>=0.52.0",
-    "tensorboard>=2.21.0",
     "fastapi>=0.141.1",
     "uvicorn>=0.52.4",
     "arq>=0.28.0",
@@ -19,12 +17,27 @@ dependencies = [
     "langgraph-checkpoint-postgres>=3.1.2",
     "openai>=3.8.0",
     "sentence-transformers>=6.0.1",
-    "pypdf>=6.17.0",
     "pgvector>=0.5.0",
 ]
 
 [dependency-groups]
 dev = ["pytest>=8.0"]
+# Training, the XGBoost baseline and corpus ingestion. None of it runs on
+# Fargate. shap is the expensive one: it drags numba and llvmlite, 143MB that
+# no runtime path imports. scikit-learn is here because ml/metrics.py uses it
+# directly -- it still reaches the runtime image as a sentence-transformers
+# dependency, which is the correct reason for it to be there.
+train = [
+    "scikit-learn>=1.5",
+    "xgboost>=2.1",
+    "shap>=0.52.0",
+    "tensorboard>=2.21.0",
+    "pypdf>=6.17.0",
+]
+
+[tool.uv]
+# Local dev and CI get everything; the image build passes --no-default-groups.
+default-groups = ["dev", "train"]
 
 # PyPI's linux torch wheel declares the CUDA runtime as dependencies -- 44
 # nvidia-* packages, ~2.5GB -- and Fargate has no GPU (section 8). They never
