@@ -7,13 +7,14 @@ API process 501MB resident and 3.1s of start-up to obtain one string -- and put
 torch into an image that never runs it. The seed loader paid the same toll for
 a CREATE TABLE.
 
-Nothing here imports anything but os, and that is the point. `cases` is not
-here: api/main.py is its only user and owns its migration.
+This module and the config module it reads are importless apart from os, and
+that is the point. `cases` is not here: api/main.py is its only user and owns
+its migration.
 """
 
-import os
+from config import env
 
-DSN = os.environ.get("AML_DSN", "postgresql://aml:aml@localhost:5432/aml")
+DSN = env("AML_DSN", "postgresql://aml:aml@localhost:5432/aml")
 
 ALERTS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS alerts (

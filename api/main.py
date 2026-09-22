@@ -1,7 +1,6 @@
 """FastAPI. Returns a case_id immediately and the UI polls; a run takes 10-20s
 and later waits at a human gate, so the request cannot block on it."""
 
-import os
 import uuid
 
 import psycopg
@@ -12,6 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from config import redis_dsn
 from db import DSN
 
 SCHEMA = """
@@ -56,8 +56,7 @@ def _valid_case_id(raw: str) -> str:
 
 @app.on_event("startup")
 async def startup():
-    app.state.redis = await create_pool(
-        RedisSettings.from_dsn(os.environ.get("AML_REDIS", "redis://localhost:6379")))
+    app.state.redis = await create_pool(RedisSettings.from_dsn(redis_dsn()))
     async with await psycopg.AsyncConnection.connect(DSN, autocommit=True) as conn:
         await conn.execute(SCHEMA)
 

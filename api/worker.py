@@ -12,9 +12,10 @@ from langgraph.types import Command
 
 from agent.graph import build, checkpointer_cm
 from agent.nodes.gather_context import _gnn
+from config import redis_dsn
 from db import DSN
 
-REDIS = RedisSettings.from_dsn(os.environ.get("AML_REDIS", "redis://localhost:6379"))
+REDIS = RedisSettings.from_dsn(redis_dsn())
 
 
 def _invoke(case_id: str, payload) -> dict:
