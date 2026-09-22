@@ -8,7 +8,7 @@ body {
   margin: 0; color: var(--ink); background: #fbfbfc;
   font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
-main { max-width: 1040px; margin: 0 auto; padding: 32px 24px 64px; }
+main { max-width: 1200px; margin: 0 auto; padding: 32px 24px 64px; }
 header { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 24px; }
 h1 { font-size: 20px; margin: 0 0 4px; }
 h2 { font-size: 17px; margin: 0 0 4px; }
@@ -56,3 +56,34 @@ button:disabled { opacity: .5; cursor: default; }
 .popover .v { font-family: ui-monospace, Menlo, monospace; word-break: break-word; }
 
 .graph { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #fff; }
+
+/* --- queue risk bar: scaled from the decision threshold, not from zero --- */
+.risk { display: flex; align-items: center; gap: 9px; }
+.track { flex: 0 0 64px; height: 6px; border-radius: 3px; background: #edeff2; overflow: hidden; }
+.fill { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #f0a58a, #c1121f); }
+
+/* --- two destinations, both real --- */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+.tab {
+  border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  background: none; padding: 8px 12px; color: var(--muted); font-weight: 500;
+}
+.tab:hover:not(.on) { background: #f3f5f7; color: var(--ink); }
+.tab.on { color: var(--ink); border-bottom-color: var(--ink); }
+
+.head { display: flex; align-items: flex-start; justify-content: space-between; }
+
+/* --- status chips --- */
+.chip {
+  display: inline-block; font-size: 11.5px; padding: 2px 8px; border-radius: 10px;
+  background: #eceff3; color: var(--muted); white-space: nowrap;
+}
+.chip-awaiting-review { background: var(--warn-bg); color: var(--warn); }
+.chip-approved { background: #e7f4ea; color: var(--ok); }
+.chip-rejected, .chip-failed { background: #fdeceb; color: var(--error); }
+
+/* Account ids, amounts and timestamps are single tokens -- breaking them mid
+   value makes the queue unreadable. Let the table scroll instead. */
+td.mono, td.num, th { white-space: nowrap; }
+.scroller { overflow-x: auto; }
+td.when { white-space: nowrap; }

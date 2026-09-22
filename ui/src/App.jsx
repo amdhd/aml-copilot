@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import AlertQueue from './AlertQueue.jsx'
+import CaseList from './CaseList.jsx'
 import CaseView from './CaseView.jsx'
 import { createCase, getCase } from './api'
 
@@ -18,6 +19,8 @@ const putCaseInUrl = id => {
 
 export default function App() {
   const [caseId, setCaseId] = useState(caseFromUrl)
+  // Two destinations, both real. Nothing here leads to a page that does not exist.
+  const [view, setView] = useState('queue')
   const [kase, setKase] = useState(null)
   const [error, setError] = useState(null)
 
@@ -53,7 +56,18 @@ export default function App() {
         </p>
       </header>
       {error && <p className="error">{error}</p>}
-      {!caseId && <AlertQueue onOpen={open} />}
+      {!caseId && (
+        <nav className="tabs">
+          <button className={view === 'queue' ? 'tab on' : 'tab'} onClick={() => setView('queue')}>
+            Alert queue
+          </button>
+          <button className={view === 'cases' ? 'tab on' : 'tab'} onClick={() => setView('cases')}>
+            Cases
+          </button>
+        </nav>
+      )}
+      {!caseId && view === 'queue' && <AlertQueue onOpen={open} />}
+      {!caseId && view === 'cases' && <CaseList onOpen={setCaseId} />}
       {caseId && !kase && <p className="muted">Opening case…</p>}
       {caseId && kase && !SETTLED.includes(kase.status) && (
         <p className="muted">Case is {kase.status}; the worker is running it…</p>
@@ -62,7 +76,7 @@ export default function App() {
         <CaseView
           kase={kase}
           onRefresh={refresh}
-          onBack={() => { setCaseId(null); setKase(null) }}
+          onBack={() => { setCaseId(null); setKase(null); setView('cases') }}
         />
       )}
     </main>

@@ -5,6 +5,7 @@ const json = async (path, init) => {
 }
 
 export const getAlerts = (limit = 50) => json(`/alerts?limit=${limit}`)
+export const getCases = (limit = 50) => json(`/cases?limit=${limit}`)
 export const getCase = id => json(`/cases/${id}`)
 export const getSubgraph = id => json(`/cases/${id}/subgraph`)
 export const createCase = alert_id =>
