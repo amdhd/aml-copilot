@@ -146,6 +146,21 @@ docker run -d --name aml-pg -e POSTGRES_PASSWORD=aml -e POSTGRES_USER=aml \
 Override the connection with `AML_DSN`. Default is
 `postgresql://aml:aml@localhost:5432/aml`.
 
+### The UI
+
+Four screens: the alert queue, a case with every citation resolvable on hover,
+the GNN subgraph for that case, and the approve/reject gate. No auth — single
+tenant, demo only.
+
+```bash
+npm --prefix ui install
+npm --prefix ui run dev     # localhost:5173, proxies /api to localhost:8000
+```
+
+It needs `make api` and `make worker` running, and Postgres and Redis up.
+A case parked at the gate is reachable by link (`/?case=<case_id>`), because
+that wait is measured in days.
+
 ### Without the dataset
 
 ```bash

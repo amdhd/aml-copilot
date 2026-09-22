@@ -1,6 +1,8 @@
 data/
 runs/
 .venv/
+node_modules/
+ui/dist/
 __pycache__/
 *.pyc
 .env
