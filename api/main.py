@@ -12,7 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from ml.score_batch import DSN
+from db import DSN
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS cases (

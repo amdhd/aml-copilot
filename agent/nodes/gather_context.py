@@ -12,7 +12,7 @@ import torch
 from ml.dataset import load
 from ml.explain import explain_transaction
 from ml.model import GAT
-from ml.score_batch import DSN
+from db import DSN
 
 CSV = "data/HI-Small_Trans.csv"
 HISTORY_LIMIT = 100

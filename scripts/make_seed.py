@@ -21,7 +21,7 @@ from pathlib import Path
 
 import psycopg
 
-from ml.score_batch import DSN
+from db import DSN
 
 OUT = Path("data/seed")
 FIXTURES = Path("eval/fixtures.json")

@@ -12,13 +12,8 @@ from pathlib import Path
 
 import psycopg
 
-from ml.score_batch import DSN, SCHEMA as ALERTS_SCHEMA
-from scripts.load_transactions import (COPY as TXN_COPY, INDEXES as TXN_INDEXES,
-                                       SCHEMA as TXN_SCHEMA)
-
-ALERTS_COPY = ("COPY alerts (txn_id, ts, src_account, dst_account, amount, "
-               "currency, payment_format, risk_score, split, is_laundering) "
-               "FROM STDIN WITH CSV")
+from db import (ALERTS_COPY, ALERTS_SCHEMA, DSN, TXN_COPY, TXN_INDEXES,
+                TXN_SCHEMA)
 
 
 def main():
@@ -29,7 +24,7 @@ def main():
     with psycopg.connect(DSN, autocommit=True) as conn:
         for name, schema, copy in (
             ("transactions", TXN_SCHEMA, TXN_COPY + " WITH CSV"),
-            ("alerts", ALERTS_SCHEMA, ALERTS_COPY),
+            ("alerts", ALERTS_SCHEMA, ALERTS_COPY + " WITH CSV"),
         ):
             path = args.seed / f"{name}.csv"
             conn.execute(schema)

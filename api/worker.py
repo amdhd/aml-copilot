@@ -12,7 +12,7 @@ from langgraph.types import Command
 
 from agent.graph import build, checkpointer_cm
 from agent.nodes.gather_context import _gnn
-from ml.score_batch import DSN
+from db import DSN
 
 REDIS = RedisSettings.from_dsn(os.environ.get("AML_REDIS", "redis://localhost:6379"))
 

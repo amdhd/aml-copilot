@@ -9,7 +9,7 @@ import psycopg
 from pgvector.psycopg import register_vector
 from sentence_transformers import SentenceTransformer
 
-from ml.score_batch import DSN
+from db import DSN
 from rag.ingest import MODEL
 
 TOP_K = 4

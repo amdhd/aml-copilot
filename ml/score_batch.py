@@ -6,39 +6,16 @@ is recorded on every row and the demo queue should filter to 'test'.
 """
 
 import argparse
-import os
 from pathlib import Path
 
 import numpy as np
 import psycopg
 import torch
 
+from db import ALERTS_COPY, ALERTS_SCHEMA, DSN
 from ml.dataset import Sampler, load, load_flat
 from ml.model import GAT
 from ml.train import FANOUT, evaluate
-
-DSN = os.environ.get("AML_DSN", "postgresql://aml:aml@localhost:5432/aml")
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS alerts (
-    txn_id         bigint PRIMARY KEY,
-    ts             timestamp NOT NULL,
-    src_account    text NOT NULL,
-    dst_account    text NOT NULL,
-    amount         numeric NOT NULL,
-    currency       text NOT NULL,
-    payment_format text NOT NULL,
-    risk_score     real NOT NULL,
-    split          text NOT NULL,
-    is_laundering  smallint NOT NULL
-);
-CREATE INDEX IF NOT EXISTS alerts_risk ON alerts (risk_score DESC);
-CREATE INDEX IF NOT EXISTS alerts_src  ON alerts (src_account);
-CREATE INDEX IF NOT EXISTS alerts_dst  ON alerts (dst_account);
-"""
-
-COPY = ("COPY alerts (txn_id, ts, src_account, dst_account, amount, currency, "
-        "payment_format, risk_score, split, is_laundering) FROM STDIN")
 
 
 def main():
@@ -64,9 +41,9 @@ def main():
     print(f"{len(flagged):,} alerts at threshold {ckpt['threshold']:.4f}")
 
     with psycopg.connect(DSN, autocommit=True) as conn:
-        conn.execute(SCHEMA)
+        conn.execute(ALERTS_SCHEMA)
         conn.execute("TRUNCATE alerts")
-        with conn.cursor().copy(COPY) as copy:
+        with conn.cursor().copy(ALERTS_COPY) as copy:
             for i in flagged:
                 r = df.iloc[i]
                 copy.write_row((int(i), r["Timestamp"], r["_src"], r["_dst"],

@@ -14,7 +14,7 @@ from agent.nodes.human_review import human_review
 from agent.nodes.retrieve_guidance import retrieve_guidance
 from agent.verify import verify_citations
 from agent.state import CaseState
-from ml.score_batch import DSN
+from db import DSN
 
 
 def _after_verify(state) -> str:
