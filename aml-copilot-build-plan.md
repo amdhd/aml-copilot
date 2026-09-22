@@ -539,6 +539,48 @@ between them. The prefix-stable build in §5 works; the ratio just tracks how mu
 per-case evidence sits after the stable prefix. Report the mechanism, not the
 number.
 
+#### The verifier caught a fabricated citation on a case nobody constructed
+
+Case 5077453 drafted eight fluent sentences and cited `txn:5077453` twice. That
+key does not exist: the alerted transaction is `alert:5077453`, and after §5's
+exclusion it appears nowhere else. The verifier refused to mark the draft
+verified and named both sentences.
+
+**This is the thesis working on an ordinary case.** Every previous demonstration
+was a fixture built to test it. Here the model produced a narrative that reads
+correctly, about the right account, citing an id it invented by pattern-matching
+its neighbours — and a deterministic check in plain Python stopped it. No LLM
+judged it. An analyst would have seen an unverified flag rather than a confident
+wrong citation.
+
+**The cause was our own change.** Dropping the alerted transaction from its own
+history removed a genuine duplicate, but it left the one transaction a narrative
+most needs to name as the only one keyed differently from every other. Nothing
+in the drafting prompt said so. That is why the Sep 4 and Sep 13 narratives also
+cite `txn:<alert_id>` and still verify — before the change, that key resolved.
+
+| drafted | narratives | cite `txn:<alert_id>` | failed verification |
+|---|---|---|---|
+| 2026-09-04 | 3 | 3 | 0 |
+| 2026-09-13 | 1 | 1 | 0 |
+| 2026-09-22 | 16 | 1 | 1 |
+
+Fixed by stating the key convention in the drafting prompt.
+
+**What cannot be claimed.** The obvious test — re-run 5077453 — is not available:
+on the re-run the classifier returned `none`, so the case short-circuited and
+never reached the drafting node. And the rate was already low. Fifteen of
+sixteen narratives used `alert:` unprompted; confirming a 6% to 0% change needs
+dozens of cases, not a handful. The rule is correct and free, one case since
+cites `alert:` properly, and that is the whole of the evidence.
+
+**The lesson is about the bonus fix, not the prompt.** `txn_id <> %s` was added
+to PR #5 as a one-clause aside, correct in isolation, not what the PR was for.
+It changed the shape of the evidence bundle, and the cost surfaced six days
+later on an unrelated case, as a citation failure three layers from the edit.
+A change to the bundle is a change to the contract every downstream node reads,
+and it deserves the same scrutiny as the change it rode in with.
+
 #### Detection time or investigation time: the bundle now answers this, and the answer was never argued for (2026-09-16)
 
 Node 1 ordered account history by `abs(ts - alert_ts)`, nearest first. That takes
