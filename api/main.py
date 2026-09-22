@@ -78,6 +78,21 @@ async def alerts(limit: int = Query(20, ge=1, le=1000)):
     return [dict(zip(keys, r)) for r in rows]
 
 
+@app.get("/cases")
+async def cases(limit: int = Query(50, ge=1, le=500)):
+    """Cases already opened, newest first. A run parked at the gate waits hours
+    or days (section 8), so it has to be findable later -- not only by whoever
+    happened to open it."""
+    async with await psycopg.AsyncConnection.connect(DSN) as conn:
+        rows = await (await conn.execute(
+            "SELECT case_id, alert_id, status, typology, created_at,"
+            " narrative IS NOT NULL AS has_narrative, verified"
+            " FROM cases ORDER BY created_at DESC LIMIT %s", (limit,))).fetchall()
+    keys = ("case_id", "alert_id", "status", "typology", "created_at",
+            "has_narrative", "verified")
+    return [dict(zip(keys, (str(r[0]), *r[1:]))) for r in rows]
+
+
 @app.post("/cases", status_code=202)
 async def create_case(body: CaseRequest):
     async with await psycopg.AsyncConnection.connect(DSN, autocommit=True) as conn:
