@@ -299,10 +299,15 @@ required rather than optional.
 
 ### Seed a reduced demo dataset
 
-~50k transactions covering the 8 eval fixtures and the demo alert queue, loading in under
-two minutes. Full dataset stays offline for training only. Without this, every spin-up
-re-loads millions of rows and a 10-minute deploy becomes 40. This also makes the repo
-clonable by someone else.
+Covering the 8 eval fixtures and the demo alert queue, loading in under two minutes. Full
+dataset stays offline for training only. Without this, every spin-up re-loads millions of
+rows and a 10-minute deploy becomes 40. This also makes the repo clonable by someone else.
+
+**The seed reduces the database, not the graph** — `make seed` writes 1,080 transactions
+and 51 alerts (97KB, loads in 2.4s), and the worker still loads the full 1.84GB graph.
+This is not a compromise on the ~50k target, it is smaller than it because the agent only
+ever reads the alerted accounts' own transactions. Subsetting the *graph* is not available
+at any size: see §13, "txn_id is a graph position".
 
 ### Price volatility
 
@@ -481,6 +486,50 @@ the UI must not present its output as more certain than it is.
 ## 13. Findings
 
 Things learned by building it that were not knowable from the plan.
+
+---
+
+### Week 7 — deploy
+
+#### `txn_id` is a graph position, and that makes the graph unsubsettable (2026-09-22)
+
+Found auditing week 7 before writing any of it. `txn_id` is not an identifier the
+system stores anywhere — it is a *row position*. `dataset.load` sorts the CSV by
+timestamp and resets the index; node *i* of the graph is row *i*. `load_transactions`
+writes `range(len(df))` as the primary key of `transactions`, `score_batch` writes the
+same integer into `alerts`, and `gather_context` passes it straight to
+`explain_transaction` as a node index. Four modules agreeing by convention, with nothing
+enforcing it, and `eval/fixtures.json` addressing cases as `"alert_id": 5077604` — a row
+number in a 5,078,345-row file.
+
+§9's reduced seed dataset is where that convention gets tested, and it fails. Dropping
+rows renumbers every node after the first gap. Measured on the smoke CSV, keeping a
+random 80%: node 500 becomes original row 625, its degree goes 9 → 11, and its neighbour
+set shares nothing with node 500's in the full graph. So a reduced graph is not a smaller
+version of the same model's input — it is a different input. Every risk score in the
+README and every attention weight in the UI would change, and all 8 fixture ids would
+point at unrelated transactions.
+
+**The resolution is that §9's problem was never the graph.** The spin-up cost §9 is
+worried about is RDS load time, and the agent only ever reads transactions belonging to
+an alerted transaction's two accounts. Keep *every* transaction touching those accounts
+and the evidence bundle is reproduced exactly, not approximately — verified by dumping
+all 8 fixtures' bundles against both databases and diffing: 168 facts, byte-identical.
+That is 1,080 transactions and 51 alerts, 97KB, loading in 2.4s against a two-minute
+budget. The graph stays whole, at 1.84GB on disk and 2.16GB resident.
+
+The convention is now checked rather than assumed. Column 0 of the feature matrix is
+`log1p(amount)`, so `gather_context._check_node` asks the graph whether it agrees with
+the database about which transaction a position holds. Across 3,000 real alerts the
+float32 round-trip has a maximum relative error of 9.0e-7, which is 1108× inside the
+tolerance — so the check is free of false positives while still catching a renumbering,
+where the id stays in range and indexing quietly succeeds against the wrong row.
+
+**What this cost to find: nothing. What it would have cost to find in week 8:** the demo
+would have worked. A renumbered graph returns plausible attention over real transactions,
+so the failure is a narrative citing the wrong neighbours, cited correctly, and the
+verifier would have passed it — §13's week 3 finding, that the citation verifier cannot
+catch faulty reasoning, one layer lower than it was originally written about.
 
 ---
 

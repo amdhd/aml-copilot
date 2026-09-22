@@ -31,6 +31,33 @@ def _gnn():
     return _cache["data"], _cache["model"]
 
 
+def _check_node(data, txn_id: int, amount: float) -> None:
+    """A txn_id is a *position* in the graph, not a key the graph stores.
+
+    Node i is row i of the sorted CSV, and `transactions`/`alerts` carry that
+    same row number as their primary key -- three modules agreeing by
+    convention, with nothing enforcing it. The seed dataset in section 9 is
+    where that convention gets tested: dropping rows renumbers every node after
+    the first gap, so node i becomes a different transaction with a different
+    neighbourhood, and the attention weights would still look entirely
+    plausible. Column 0 of the feature matrix is log1p(amount), so the graph can
+    be asked whether it agrees with the database about which transaction this
+    is.
+    """
+    if not 0 <= txn_id < data.num_nodes:
+        raise ValueError(
+            f"txn_id {txn_id} is outside the {data.num_nodes}-node graph. The "
+            f"graph must be built from the full CSV even when the database "
+            f"holds only a seed subset -- see section 9.")
+    graph_amount = float(np.expm1(data.x[txn_id, 0].item()))
+    if not np.isclose(graph_amount, amount, rtol=1e-3):
+        raise ValueError(
+            f"graph node {txn_id} has amount {graph_amount:,.2f} but the "
+            f"database says {amount:,.2f}. The graph and the database were "
+            f"built from different row orderings, so txn_id does not address "
+            f"the same transaction in both.")
+
+
 def gather_context(state: dict) -> dict:
     alert_id = state["alert_id"]
     evidence: dict = {}
@@ -80,6 +107,7 @@ def gather_context(state: dict) -> dict:
         }
 
     data, model = _gnn()
+    _check_node(data, int(txn_id), float(amount))
     ex = explain_transaction(data, model, int(txn_id))
     for neighbour, weight, is_self in zip(ex["neighbours"], ex["weights"], ex["is_self"]):
         evidence[f"gnn:{int(neighbour)}"] = {
