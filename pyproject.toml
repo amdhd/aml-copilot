@@ -26,6 +26,19 @@ dependencies = [
 [dependency-groups]
 dev = ["pytest>=8.0"]
 
+# PyPI's linux torch wheel declares the CUDA runtime as dependencies -- 44
+# nvidia-* packages, ~2.5GB -- and Fargate has no GPU (section 8). They never
+# install on macOS, so this is invisible in local dev and only lands in the
+# image build. Linux resolves from the CPU index instead; macOS stays on PyPI,
+# where the wheel is already CPU-only and carries the MPS build.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
 [tool.pytest.ini_options]
 # Flat layout: the packages are run as `python -m ml.train` from the repo
 # root, so the root has to be importable here too.
