@@ -1,0 +1,8 @@
+# State holds resource ids and the ARNs the ephemeral layer reads; tfvars holds
+# the budget email and the allowed IP. Neither belongs in a public repo.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+tfplan
