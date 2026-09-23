@@ -66,15 +66,15 @@ export default function CaseView({ kase, onBack, onRefresh }) {
         {/* No count here. This said "3 of 8" and went stale the next eval run;
             the figure moves by +-1 between runs of identical input (README), so
             it belongs with the eval results, not in the UI. Confidence is not
-            calibrated -- correct answers came back lower than wrong ones. It is
+            calibrated, and its ordering changes between runs. It is
             shown because hiding it would be worse, and labelled so nobody
             triages on it. */}
         <p className="warn">
           A suggestion, not a finding. The classifier is wrong on a large share
           of the labelled eval fixtures (current figure in the README), and its
           confidence{kase.confidence != null && ` (${kase.confidence})`} is not
-          calibrated — its most confident answers have been its wrong ones. Do
-          not use it to triage.
+          calibrated — wrong answers have come back more confident than right
+          ones. Do not use it to triage.
         </p>
         {kase.reasoning && <p className="muted">{kase.reasoning}</p>}
       </section>
