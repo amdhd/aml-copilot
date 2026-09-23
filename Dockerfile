@@ -18,7 +18,7 @@ COPY ui/src ./src
 RUN npm run build
 
 
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.12-trixie-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -45,7 +45,12 @@ SentenceTransformer('Qwen/Qwen3-Embedding-0.6B')" \
  && find /opt/hf -name '*.lock' -delete
 
 
-FROM python:3.12-slim-bookworm AS runtime
+# Debian 13, not 12. ECR's scan of a bookworm build found 4 critical and 15
+# high CVEs, every one in a Debian package (perl, openssl, util-linux, zlib) and
+# none in the app -- and apt-get upgrade changed nothing, because bookworm had
+# no fixed versions to upgrade to. The builder moves with it so the venv is
+# built against the same libc it runs on.
+FROM python:3.12-slim-trixie AS runtime
 
 # AML_ENV is not "local", so every AML_* variable must come from the task
 # definition; a missing one fails the container on the way up rather than one
