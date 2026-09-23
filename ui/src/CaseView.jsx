@@ -63,14 +63,17 @@ export default function CaseView({ kase, onBack, onRefresh }) {
       <section className="panel">
         <h3>Suggested typology</h3>
         <p className="typology">{kase.typology ?? '—'}</p>
-        {/* The classifier scored 3/8 on the eval fixtures, and confidence is not
+        {/* No count here. This said "3 of 8" and went stale the next eval run;
+            the figure moves by +-1 between runs of identical input (README), so
+            it belongs with the eval results, not in the UI. Confidence is not
             calibrated -- correct answers came back lower than wrong ones. It is
             shown because hiding it would be worse, and labelled so nobody
             triages on it. */}
         <p className="warn">
-          A suggestion, not a finding. The classifier was right on 3 of 8 eval
-          fixtures, and its confidence{kase.confidence != null && ` (${kase.confidence})`} is
-          not calibrated — on that run the most confident answer was wrong. Do
+          A suggestion, not a finding. The classifier is wrong on a large share
+          of the labelled eval fixtures (current figure in the README), and its
+          confidence{kase.confidence != null && ` (${kase.confidence})`} is not
+          calibrated — its most confident answers have been its wrong ones. Do
           not use it to triage.
         </p>
         {kase.reasoning && <p className="muted">{kase.reasoning}</p>}
