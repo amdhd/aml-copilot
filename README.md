@@ -1,5 +1,7 @@
 # AML Investigation Copilot
 
+![AWS architecture: ALB, api and worker tasks on ECS Fargate, RDS Postgres with pgvector, S3, ECR](infra/architecture.png)
+
 Graph-neural detection of money laundering, with a deterministic agent workflow for
 drafting Suspicious Activity Report narratives that a human approves.
 
@@ -8,12 +10,13 @@ entity's transaction context, identifying which laundering typology it matches, 
 it against regulatory guidance, and drafting a narrative. **This system does the
 gathering and drafting; the analyst decides.** Nothing is auto-filed.
 
-**Status: weeks 1–5 of 8 complete.** A GAT scores 5.08M transactions into a Postgres
+**Status: weeks 1–7 of 8 complete.** A GAT scores 5.08M transactions into a Postgres
 alert queue; a deterministic LangGraph workflow gathers evidence, classifies the
 laundering typology, retrieves regulatory guidance, drafts a cited SAR narrative,
-verifies every citation in plain Python, and parks the case at a human gate. The UI and
-Terraform are not built yet. See [aml-copilot-build-plan.md](aml-copilot-build-plan.md)
-for the design and §13 for findings that changed it.
+verifies every citation in plain Python, and parks the case at a human gate for an
+analyst to approve or reject in the UI. It deploys to ECS Fargate with Terraform — see
+[Deploy](#deploy-aws). See [aml-copilot-build-plan.md](aml-copilot-build-plan.md) for
+the design and §13 for findings that changed it.
 
 ## Agent eval results
 
@@ -169,6 +172,9 @@ It needs `make api` and `make worker` running, and Postgres and Redis up.
 A case parked at the gate is reachable by link (`/?case=<case_id>`), because
 that wait is measured in days.
 
+`npm --prefix ui run build` instead, and `make api` serves the built UI itself at
+`localhost:8000` — the way it runs deployed, with the API under `/api`.
+
 ### Without the dataset
 
 ```bash
@@ -187,6 +193,73 @@ uv run python scripts/watch_training.py <logfile>   # localhost:8765, parses the
 
 TensorBoard records from the run that starts after it; the log watcher can attach to a
 run already in progress.
+
+---
+
+## Deploy (AWS)
+
+Runs on ECS Fargate in `ap-southeast-1` (diagram at the top). **This is not a 24/7
+service** — it is applied before a demo and destroyed after. Two Terraform layers with
+separate state:
+
+| Layer | Contains | Lifecycle | Approx. cost |
+|---|---|---|---|
+| `infra/persistent` | VPC, subnets, security groups, ECR, S3 (graph cache), log group, SSM key, IAM, $20 budget alarm | applied once | ~$0.20/mo |
+| `infra/ephemeral` | RDS Postgres 16 (`db.t4g.micro`), ALB, api task + Redis sidecar, worker on Fargate Spot, seed task | per demo | ~$0.11/hr |
+
+Estimates at on-demand `ap-southeast-1` prices when this was built; the budget alarm is
+the real guard.
+
+**Once:**
+
+```bash
+cp infra/persistent/terraform.tfvars.example infra/persistent/terraform.tfvars   # email, your IP
+cd infra/persistent && terraform init && terraform apply
+aws ssm put-parameter --name /aml-copilot/llm-api-key --type SecureString \
+  --overwrite --value "$(grep '^AML_LLM_API_KEY=' ../../.env | cut -d= -f2-)"
+```
+
+Then push the image (tagged with the commit it was built from) and upload the graph
+cache the worker fetches on start-up:
+
+```bash
+docker build --provenance=false -t aml-copilot .
+docker tag aml-copilot <ecr_repository_url>:<git sha> && docker push <ecr_repository_url>:<git sha>
+aws s3 cp data/HI-Small_Trans.None.graph.pt s3://<artifacts_bucket>/graph/<sha256[:16]>/HI-Small_Trans.None.graph.pt
+```
+
+**Per demo** (~6 minutes, most of it RDS):
+
+```bash
+cd infra/ephemeral && terraform init && terraform apply -var image_tag=<git sha>
+# run the seed_command it prints -- loads 1,080 txns, 51 alerts, 48 guidance chunks
+# open the url it prints
+terraform destroy -var image_tag=<git sha>
+```
+
+Choices worth defending:
+
+- **No NAT Gateway** (~$32/mo idle). The embedding model is baked into the image, so
+  the only egress is ECR, S3 and the LLM API; tasks reach them through public IPs and
+  security groups admit only the ALB. Production would put tasks in private subnets
+  behind VPC endpoints.
+- **The database is rebuilt every demo and seeded in under a second.** The seed keeps
+  every transaction touching an alerted account, so evidence bundles are reproduced
+  exactly; the graph itself is never subsetted (§13, "txn_id is a graph position").
+- **Redis is a sidecar in the on-demand api task**, not ElastiCache: cheaper, and a
+  Spot reclaim of the worker cannot take the queue with it. Run state lives in the
+  Postgres checkpointer either way.
+- **The ALB is open to `allowed_cidrs` only.** There is no auth, and every case spends
+  LLM credit.
+- **Secrets stay out of Terraform state and task definitions.** The LLM key is set from
+  the CLI; the DSN reaches containers through SSM.
+
+Verified end to end on 2026-09-23: a case through the public ALB parked at the human
+gate after 31s and resumed to `approved` from the RDS checkpoint.
+
+**Data residency.** A bank could not send transaction data to a third-party LLM API.
+The production path is the same class of model self-hosted inside the VPC; nothing else
+in the architecture changes.
 
 ---
 
@@ -260,12 +333,29 @@ ml/
   explain.py      attention weights + SHAP
   score_batch.py  batch scoring -> Postgres alerts
   metrics.py      illicit-class F1 + AUC-PR
+agent/
+  graph.py        LangGraph, fixed edges, Postgres checkpointer
+  nodes/          gather_context, classify_typology, retrieve_guidance,
+                  draft_narrative, human_review
+  verify.py       citation verifier, plain Python
+  schemas.py      one pydantic schema per LLM node
+api/
+  main.py         FastAPI; serves the built UI in deployment
+  worker.py       arq worker that runs the graph
+rag/ingest.py     guidance corpus -> pgvector, local embeddings
+ui/               React: queue, case, subgraph, approve/reject
+eval/             8 labelled fixtures, make eval
+infra/
+  persistent/     VPC, ECR, S3, IAM, budget -- applied once
+  ephemeral/      ECS, ALB, RDS -- apply/destroy per demo
+  diagram.py      renders architecture.png
 scripts/
-  make_smoke_csv.py     synthetic fixture in the IBM schema
-  watch_training.py     live view of a run in progress
+  make_seed.py / load_seed.py   reduced demo dataset, preserving txn_ids
+  make_smoke_csv.py             synthetic fixture in the IBM schema
+  watch_training.py             live view of a run in progress
+config.py, db.py  config and table DDL, importable without the ML stack
+Dockerfile        one image for api, worker and seed
 ```
-
-Roughly 500 lines. Weeks 3–8 add `agent/`, `api/`, `rag/`, `ui/`, `eval/` and `infra/`.
 
 ---
 
@@ -286,6 +376,14 @@ their account, so they have no neighbours at all and the GAT has no context to w
 — it falls back on raw features, where the enormous amounts dominate. Going further is
 feature engineering (give the model its own node degree so it can learn to distrust
 isolated nodes), not graph construction.
+
+**Narratives do not cite the guidance they retrieve.** Node 3 returns guidance chunks
+into the evidence bundle and the verifier would accept citations to them, but 0 of 16
+drafted narratives cite one. Retrieval works; the drafting prompt does not use it.
+
+**The worker can lose a start-up race on AWS.** On a fresh apply it may start before
+the api task's service-discovery name exists, exit on "Name or service not known", and
+be restarted by ECS; the second start succeeds.
 
 **Validation has only 524 illicit transactions.** Epoch-to-epoch F1 differences below
 roughly 0.03 are noise. This caps how finely anything can be tuned, and it is why the
