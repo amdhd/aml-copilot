@@ -118,3 +118,25 @@ def test_empty_narrative_verifies_vacuously():
     result = verify_citations({"evidence": {}, "narrative": []})
     assert result["verified"] is True
     assert result["escalated"] is False
+
+
+GUIDANCE = {"guidance:ffiec#13": {"kind": "guidance", "source": "ffiec", "chunk": 13,
+                                  "text": "Funds are moved through multiple accounts."}}
+
+
+def test_sentence_resting_only_on_guidance_fails():
+    state = {"evidence": {**bundle(("14766-805C42580", "1299-8010F8CE0")), **GUIDANCE},
+             "narrative": [sentence("This is consistent with layering.", "guidance:ffiec#13")]}
+    result = verify_citations(state)
+    assert result["verified"] is False
+    assert result["guidance_only"] == [{"sentence": 0}]
+    assert result["citation_failures"] == []      # every id resolved; still not supported
+
+
+def test_guidance_beside_case_evidence_verifies():
+    state = {"evidence": {**bundle(("14766-805C42580", "1299-8010F8CE0")), **GUIDANCE},
+             "narrative": [sentence("The transfer matches a red flag for layering.",
+                                    "txn:0", "guidance:ffiec#13")]}
+    result = verify_citations(state)
+    assert result["verified"] is True
+    assert result["guidance_only"] == []

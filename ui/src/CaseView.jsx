@@ -84,7 +84,7 @@ export default function CaseView({ kase, onBack, onRefresh }) {
         {kase.verified != null && (
           <p className={kase.verified ? 'ok' : 'error'}>
             {kase.verified
-              ? 'Every citation resolved to an assembled fact; no account named outside the bundle.'
+              ? 'Every citation resolved to an assembled fact; no account named outside the bundle; no sentence rests on guidance alone.'
               : 'Verification failed — see the case record.'}
           </p>
         )}
