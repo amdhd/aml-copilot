@@ -61,3 +61,22 @@ CREATE INDEX IF NOT EXISTS txn_dst ON transactions (dst_account, ts);
 
 TXN_COPY = ("COPY transactions (txn_id, ts, src_account, dst_account, amount, "
             "currency, payment_format, is_laundering) FROM STDIN")
+
+# 1024 is Qwen3-Embedding-0.6B's output width (rag/ingest.py's MODEL). Here
+# rather than there so the seed loader can create the table without importing
+# sentence-transformers.
+GUIDANCE_SCHEMA = """
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE TABLE IF NOT EXISTS guidance (
+    id        serial PRIMARY KEY,
+    source    text NOT NULL,
+    chunk_ix  int  NOT NULL,
+    text      text NOT NULL,
+    embedding vector(1024) NOT NULL
+);
+"""
+
+GUIDANCE_INDEX = ("CREATE INDEX IF NOT EXISTS guidance_vec ON guidance "
+                  "USING hnsw (embedding vector_cosine_ops)")
+
+GUIDANCE_COPY = "COPY guidance (source, chunk_ix, text, embedding) FROM STDIN"

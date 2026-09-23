@@ -4,9 +4,19 @@
 # worker; the default runs the API.
 #
 # What is in it: runtime dependencies only, the 122KB GAT checkpoint, the seed
-# CSVs, and the embedding model. What is deliberately not: the training stack
+# CSVs, the embedding model, and the built UI, which the API serves. What is deliberately not: the training stack
 # (see pyproject's train group), the 475MB CSV, and the 1.84GB graph cache,
 # which the worker fetches from S3 on the way up.
+
+FROM node:22-bookworm-slim AS ui
+
+WORKDIR /ui
+COPY ui/package.json ui/package-lock.json ./
+RUN npm ci
+COPY ui/index.html ui/vite.config.js ./
+COPY ui/src ./src
+RUN npm run build
+
 
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
@@ -61,6 +71,7 @@ COPY rag ./rag
 COPY scripts ./scripts
 COPY artifacts/model-HI-Small_Trans.pt ./artifacts/
 COPY data/seed ./data/seed
+COPY --from=ui /ui/dist ./ui/dist
 
 # The worker downloads the graph here, so it has to be writable by the run user.
 RUN useradd --create-home --uid 10001 aml \

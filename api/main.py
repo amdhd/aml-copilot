@@ -2,11 +2,13 @@
 and later waits at a human gate, so the request cannot block on it."""
 
 import uuid
+from pathlib import Path
 
 import psycopg
 from arq import create_pool
 from arq.connections import RedisSettings
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.staticfiles import StaticFiles
 from typing import Literal
 
 from pydantic import BaseModel
@@ -34,6 +36,19 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS evidence jsonb;
 """
 
 app = FastAPI(title="AML Investigation Copilot")
+UI = Path("ui/dist")
+
+
+@app.middleware("http")
+async def strip_api_prefix(request, call_next):
+    """The UI calls /api/..., which the Vite proxy strips in development.
+    Deployed there is no proxy -- this process serves the UI too (bottom of
+    file) -- so the stripping happens here, and the browser sees one origin in
+    both. Unprefixed paths still work, for curl and the eval harness."""
+    path = request.scope["path"]
+    if path == "/api" or path.startswith("/api/"):
+        request.scope["path"] = path[len("/api"):] or "/"
+    return await call_next(request)
 
 
 class CaseRequest(BaseModel):
@@ -181,3 +196,9 @@ async def decide(case_id: str, body: Decision):
             raise HTTPException(409, f"case is {row[0]}, not awaiting_review")
     await app.state.redis.enqueue_job("run_case", case_id, row[1], body.decision)
     return {"case_id": case_id, "status": body.decision}
+
+
+# Last, so every API route above matches first. Only when the UI has been built:
+# locally `npm run dev` serves it, and the image builds it (Dockerfile).
+if UI.is_dir():
+    app.mount("/", StaticFiles(directory=UI, html=True), name="ui")
