@@ -37,6 +37,8 @@ def run_one(graph, fixture):
         "citations": len(citations),
         "unresolved": len(state.get("citation_failures") or []),
         "hallucinated": len(state.get("hallucinated_entities") or []),
+        "guidance_cites": sum(i.startswith("guidance:") for i in citations),
+        "guidance_only": len(state.get("guidance_only") or []),
         "escalated": bool(state.get("escalated")),
         "prompt_tokens": sum(u["prompt_tokens"] for u in usage.values()),
         "completion_tokens": sum(u["completion_tokens"] for u in usage.values()),
@@ -58,7 +60,8 @@ def main():
                       f"{str(error)[:110]}")
                 rows.append({**{k: 0 for k in
                                 ("seconds", "sentences", "citations", "unresolved",
-                                 "hallucinated", "prompt_tokens", "completion_tokens",
+                                 "hallucinated", "guidance_cites", "guidance_only",
+                                 "prompt_tokens", "completion_tokens",
                                  "cached_tokens")},
                              "alert_id": fixture["alert_id"],
                              "expected": fixture["typology"], "predicted": None,
@@ -85,6 +88,13 @@ def main():
     print(f"| Citation validity | **100%** | "
           f"{(cites - unresolved) / cites if cites else 1:.1%} ({cites - unresolved}/{cites}) |")
     print(f"| Hallucinated entities | **0** | {sum(r['hallucinated'] for r in rows)} |")
+    # Guidance is in `citations` too, so validity above covers it resolving; these
+    # say whether the red flags were used, and never used alone (agent/verify.py).
+    drafted = [r for r in rows if r["sentences"]]
+    print(f"| Narratives citing guidance | report | "
+          f"{sum(r['guidance_cites'] > 0 for r in drafted)}/{len(drafted)} "
+          f"({sum(r['guidance_cites'] for r in rows)} cites) |")
+    print(f"| Guidance-only sentences | **0** | {sum(r['guidance_only'] for r in rows)} |")
     print(f"| Escalated after retry | report | {sum(r['escalated'] for r in rows)} |")
     print(f"| p50 / p95 latency | report | {statistics.median(seconds):.1f}s / "
           f"{seconds[int(len(seconds) * 0.95) - 1]:.1f}s |")

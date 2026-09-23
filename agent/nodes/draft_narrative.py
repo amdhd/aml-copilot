@@ -19,6 +19,12 @@ currency that does not appear in the evidence.
 - Amounts carry currencies. Do not compare or aggregate across currencies, and do \
 not apply a threshold from one currency to an amount in another.
 - Describe the activity: who, what, when, where, and why it is suspicious.
+- The REGULATORY GUIDANCE ids are red flags and indicators from FATF, FFIEC and \
+FinCEN. When a sentence says why the activity is suspicious, cite the red flag it \
+matches together with the case ids that show the pattern. Never cite guidance \
+alone: a sentence whose only ids are guidance fails the whole draft. Cite a \
+guidance id only if its text describes the pattern you are stating; guidance on \
+how to write a report is not a red flag.
 - Write about money and accounts, never about the detection model. Attention \
 weights, risk scores and neighbourhood sizes are internal diagnostics; an analyst \
 reading this needs the transaction pattern, not the model's arithmetic. Use \
@@ -42,10 +48,10 @@ def draft_narrative(state: dict) -> dict:
     # [system][retrieved guidance][case data], never interleaved, so the prefix
     # stays stable and provider prompt caching can hit it.
     case_data = (
-        "REGULATORY GUIDANCE\n"
+        "REGULATORY GUIDANCE — red flags, cite beside case evidence\n"
         + json.dumps(guidance, indent=1, default=str)
         + f"\n\nTYPOLOGY: {state['typology']} (confidence {state['confidence']})\n"
-        + "\nEVIDENCE BUNDLE — cite only these ids\n"
+        + "\nEVIDENCE BUNDLE — case facts\n"
         + json.dumps(facts, indent=1, default=str))
 
     narrative, usage = complete_json(SYSTEM, case_data, Narrative, max_tokens=8000)

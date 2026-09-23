@@ -22,47 +22,71 @@ the design and §13 for findings that changed it.
 
 `make eval` — 8 fixtures, labelled by inspecting each account's transaction pattern
 rather than by copying the dataset's per-transaction `Is Laundering` column (two of the
-eight disagree with it). Provider `deepseek-flash` on DeepSeek.
+eight disagree with it). Provider `deepseek-flash` on DeepSeek, run 2026-09-24.
 
 | Metric | Target | Result |
 |---|---|---|
 | Typology accuracy | report | **4/8 (50%)** |
-| Citation validity | **100%** | **100.0% (158/158)** |
+| Citation validity | **100%** | **100.0% (186/186)** |
 | Hallucinated entities | **0** | **0** |
+| Narratives citing a red flag | report | **7/7** (15 cites) |
+| Guidance-only sentences | **0** | **0** |
 | Escalated after retry | report | 0 |
 | Provider errors | report | **0** |
-| p50 / p95 latency | report | 41.7s / 50.8s |
-| Tokens per case | report | 6,620 in, 4,387 out |
-| Prompt cache hit rate | report | 58.0% |
+| p50 / p95 latency | report | 48.1s / 62.0s |
+| Tokens per case | report | 7,468 in, 3,538 out |
+| Prompt cache hit rate | report | 75.8% |
 
-**Read these two numbers together.** Deterministic verification works: across 158
-citations in 6 narratives, every `evidence_id` in every drafted sentence resolved to a
+**Read these two numbers together.** Deterministic verification works: across 186
+citations in 7 narratives, every `evidence_id` in every drafted sentence resolved to a
 fact the pipeline actually assembled, and no narrative named an account outside the
 evidence bundle. But the same run classified the typology correctly only four times in
 eight. **A perfectly cited narrative about the wrong typology is a perfectly cited wrong
 answer.** The verifier proves the narrative rests on real evidence; it proves nothing
 about whether the conclusion is right.
 
-This is the first run in which all eight fixtures completed with no provider error.
+### Red flags, cited beside the evidence
+
+Narratives now cite the regulatory red flag a pattern matches — FATF, FFIEC Appendix
+F/G, or FinCEN — alongside the transactions that show it. Before this run they cited
+guidance 0 times in 6. A sentence whose *only* citations are guidance fails
+verification: every id in it would resolve, while nothing from the case supported it.
+
+Each cited chunk was read against its sentence and contains the pattern the sentence
+states. Three things that are true of these citations and belong with the count:
+
+- **Citations make a wrong answer look better grounded, not more right.** Fixture
+  4385373 is labelled `none`; the classifier said `layering`, and its narrative now
+  cites three layering red flags. The verifier checks that the red flag exists and sits
+  beside real transactions. It cannot check that the red flag applies.
+- **Rapid movement leans on a virtual-asset document.** Its closest match is FATF's
+  *Virtual Assets* indicator for "multiple high-value transactions in short
+  succession", cited here for fiat wires, ACH and cheques. The wording fits; the
+  document's scope does not, and one sentence calls Euro cheques a match for
+  "virtual-asset red flags".
+- **Most cites go to one FinCEN chunk.** 11 of 15 cite the same list of common
+  patterns in FinCEN's SAR narrative guidance (layering across multiple accounts,
+  unusual mixed deposits, bursts of activity in a short period). It is a genuine
+  red-flag list inside a report-writing guide, not writing advice.
 
 The cache hit rate is the one design decision that measured cleanly: §5 builds every
 prompt `[system][case data]` with no interleaving, and the stable prefix hits. It moves
-run to run with how much evidence each case carries — 74.2% on the previous run, 58.0%
-here — so treat it as a working mechanism rather than a fixed figure.
+run to run with how much evidence each case carries — 58.0% and 74.2% on earlier runs,
+75.8% here — so treat it as a working mechanism rather than a fixed figure.
 
 Caveats that belong with the table:
 
 - **The typology number is not reproducible to ±1.** The provider is not deterministic
   at `temperature=0` — one fixture returned three different typologies across three
-  samples of identical input, and between the last two runs two fixtures swapped one
-  wrong answer for another without any change in their evidence. 4/8 is a single draw,
-  not a measurement. Quote it with a range across runs or not at all.
-- **Confidence is not calibrated; it is inverted.** Sorted by the model's own
-  confidence, the top three answers (0.82, 0.80, 0.70) are all wrong and the next four
-  (0.65, 0.62, 0.62, 0.60) are all right. **Every answer above 0.65 was wrong.**
+  samples of identical input, and between runs fixtures swap one wrong answer for
+  another without any change in their evidence. 4/8 is a single draw, not a
+  measurement. Quote it with a range across runs or not at all.
+- **Confidence is not calibrated.** On the previous run it was inverted — every answer
+  above 0.65 was wrong. On this one the top answer (0.85) is right, but a wrong one
+  scores 0.82 and a right one 0.40. Its ordering does not hold from one run to the next.
   Confidence cannot be used for triage, and the UI labels it as such.
-- **Two fixtures produced no narrative,** both by classifying `none` and
-  short-circuiting before drafting. 158/158 covers the six cases that drafted.
+- **One fixture produced no narrative,** by classifying `none` and short-circuiting
+  before drafting. 186/186 covers the seven cases that drafted.
 - **Latency is the reasoning model, not throttling.** `deepseek-flash` spends thousands
   of tokens on chain-of-thought per call, which is why output tokens exceed an earlier
   Groq run several times over.
@@ -232,7 +256,7 @@ aws s3 cp data/HI-Small_Trans.None.graph.pt s3://<artifacts_bucket>/graph/<sha25
 
 ```bash
 cd infra/ephemeral && terraform init && terraform apply -var image_tag=<git sha>
-# run the seed_command it prints -- loads 1,080 txns, 51 alerts, 48 guidance chunks
+# run the seed_command it prints -- loads 1,080 txns, 51 alerts, 121 guidance chunks
 # open the url it prints
 terraform destroy -var image_tag=<git sha>
 ```
@@ -342,7 +366,7 @@ agent/
 api/
   main.py         FastAPI; serves the built UI in deployment
   worker.py       arq worker that runs the graph
-rag/ingest.py     guidance corpus -> pgvector, local embeddings
+rag/ingest.py     red-flag corpus -> pgvector, local embeddings
 ui/               React: queue, case, subgraph, approve/reject
 eval/             8 labelled fixtures, make eval
 infra/
@@ -377,13 +401,10 @@ their account, so they have no neighbours at all and the GAT has no context to w
 feature engineering (give the model its own node degree so it can learn to distrust
 isolated nodes), not graph construction.
 
-**Narratives do not cite the guidance they retrieve.** Node 3 returns guidance chunks
-into the evidence bundle and the verifier would accept citations to them, but 0 of 16
-drafted narratives cite one. Retrieval works; the drafting prompt does not use it.
-
-**The worker can lose a start-up race on AWS.** On a fresh apply it may start before
-the api task's service-discovery name exists, exit on "Name or service not known", and
-be restarted by ECS; the second start succeeds.
+**The corpus is four documents, added by hand.** FATF and FFIEC publish behind bot
+protection, so the PDFs are downloaded manually into `data/corpus/` (gitignored) and
+only FFIEC pages 345–356 (Appendices F and G) are ingested. The seed carries the
+ingested chunks, so a clone deploys with them, but re-running ingest needs the PDFs.
 
 **Validation has only 524 illicit transactions.** Epoch-to-epoch F1 differences below
 roughly 0.03 are noise. This caps how finely anything can be tuned, and it is why the

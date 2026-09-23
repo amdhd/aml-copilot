@@ -15,7 +15,14 @@ from agent.nodes.gather_context import _gnn
 from config import redis_dsn
 from db import DSN
 
+# Deployed, Redis is a sidecar in the api task and the worker reaches it by a
+# Cloud Map name that appears only once that task is running -- ~70s after
+# apply, measured. arq's default of 5 retries 1s apart gave up after 5s, so the
+# first worker exited on "Name or service not known" and ECS replaced it. Two
+# minutes covers the wait without a restart.
 REDIS = RedisSettings.from_dsn(redis_dsn())
+REDIS.conn_retries = 60
+REDIS.conn_retry_delay = 2
 
 
 def _invoke(case_id: str, payload) -> dict:
@@ -57,7 +64,8 @@ async def run_case(ctx, case_id: str, alert_id: int, decision: str | None = None
                 " WHERE case_id=%s",
                 (state["verified"], state.get("escalated", False),
                  json.dumps({"citation_failures": state.get("citation_failures", []),
-                             "hallucinated_entities": state.get("hallucinated_entities", [])}),
+                             "hallucinated_entities": state.get("hallucinated_entities", []),
+                             "guidance_only": state.get("guidance_only", [])}),
                  case_id))
 
 

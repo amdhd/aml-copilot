@@ -24,8 +24,8 @@
 !ui/vite.config.js
 !ui/src
 
-# 122KB checkpoint (section 2: the model artifact is baked) and 766KB of seed
-# data, of which 669KB is the guidance corpus with its embeddings. The 1.84GB graph is deliberately absent -- AML_GRAPH_S3, see artifacts.py.
+# 122KB checkpoint (section 2: the model artifact is baked) and 1.8MB of seed
+# data, of which 1.7MB is the guidance corpus with its embeddings. The 1.84GB graph is deliberately absent -- AML_GRAPH_S3, see artifacts.py.
 !artifacts/model-HI-Small_Trans.pt
 !data/seed
 
