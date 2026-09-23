@@ -3,7 +3,7 @@
 txn_id is a *position* in the graph -- node i is row i of the sorted CSV -- so
 the seed cannot renumber anything. It is a row filter and nothing else: the
 rows it keeps carry the ids they had in the full dataset, and the GNN still
-loads the full graph. Renumbering would change both the neighbourhood the model
+loads the full graph. The guidance corpus is exported whole. Renumbering would change both the neighbourhood the model
 sees and the risk scores already published in the README.
 
 What it keeps, and why that is enough: the agent only ever reads transactions
@@ -66,6 +66,12 @@ def main():
              " payment_format, is_laundering FROM transactions"
              " WHERE src_account = ANY(%s) OR dst_account = ANY(%s)"
              " ORDER BY txn_id", (accounts, accounts)),
+            # All of it: node 3 retrieves by similarity, so any subset changes
+            # which chunks a narrative can cite. Without this a fresh database
+            # retrieves nothing and narratives draft with no guidance at all.
+            ("guidance",
+             "SELECT source, chunk_ix, text, embedding::text FROM guidance"
+             " ORDER BY source, chunk_ix", ()),
         ):
             path = args.out / f"{name}.csv"
             with conn.cursor() as cur, path.open("w", newline="") as fh:

@@ -1,6 +1,12 @@
 # .env is loaded here so every target sees the same config, whichever
-# terminal tab it runs in.
--include .env
+# terminal tab it runs in. It is loaded as defaults: a variable already set in
+# the shell wins. Included as-is, .env beat the shell, so
+# `AML_DSN=<scratch> make load-seed` truncated the database in .env instead --
+# the one the command line said not to touch. .env.mk is .env rewritten to ?=,
+# regenerated whenever .env changes.
+.env.mk: .env
+	sed -E 's/^([A-Za-z_][A-Za-z0-9_]*)=/\1 ?= /' $< > $@
+-include .env.mk
 export
 
 CSV ?= data/HI-Small_Trans.csv

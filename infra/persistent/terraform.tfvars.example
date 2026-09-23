@@ -1,0 +1,2 @@
+budget_email  = "you@example.com"
+allowed_cidrs = ["203.0.113.7/32"]   # curl https://checkip.amazonaws.com

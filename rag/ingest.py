@@ -12,25 +12,11 @@ import psycopg
 from pgvector.psycopg import register_vector
 from sentence_transformers import SentenceTransformer
 
-from db import DSN
+from db import DSN, GUIDANCE_INDEX, GUIDANCE_SCHEMA
 
 CORPUS = Path("data/corpus")
 MODEL = "Qwen/Qwen3-Embedding-0.6B"
-DIM = 1024
 TARGET_CHARS = 1400          # a guidance provision, kept whole
-
-SCHEMA = f"""
-CREATE EXTENSION IF NOT EXISTS vector;
-CREATE TABLE IF NOT EXISTS guidance (
-    id        serial PRIMARY KEY,
-    source    text NOT NULL,
-    chunk_ix  int  NOT NULL,
-    text      text NOT NULL,
-    embedding vector({DIM}) NOT NULL
-);
-"""
-INDEX = ("CREATE INDEX IF NOT EXISTS guidance_vec ON guidance "
-         "USING hnsw (embedding vector_cosine_ops)")
 
 
 def _read(path: Path) -> str:
@@ -77,7 +63,7 @@ def main():
                                                 show_progress_bar=False)
 
     with psycopg.connect(DSN, autocommit=True) as conn:
-        conn.execute(SCHEMA)
+        conn.execute(GUIDANCE_SCHEMA)
         register_vector(conn)
         conn.execute("TRUNCATE guidance")
         with conn.cursor().copy(
@@ -86,7 +72,7 @@ def main():
             copy.set_types(["text", "integer", "text", "vector"])
             for source, ix, text, vector in zip(sources, indexes, texts, vectors):
                 copy.write_row((source, ix, text, vector))
-        conn.execute(INDEX)
+        conn.execute(GUIDANCE_INDEX)
         for row in conn.execute("SELECT source, count(*) FROM guidance "
                                 "GROUP BY source ORDER BY source"):
             print(f"  {row[0]}: {row[1]} chunks")

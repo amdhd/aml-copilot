@@ -4,11 +4,21 @@
 # worker; the default runs the API.
 #
 # What is in it: runtime dependencies only, the 122KB GAT checkpoint, the seed
-# CSVs, and the embedding model. What is deliberately not: the training stack
+# CSVs, the embedding model, and the built UI, which the API serves. What is deliberately not: the training stack
 # (see pyproject's train group), the 475MB CSV, and the 1.84GB graph cache,
 # which the worker fetches from S3 on the way up.
 
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS ui
+
+WORKDIR /ui
+COPY ui/package.json ui/package-lock.json ./
+RUN npm ci
+COPY ui/index.html ui/vite.config.js ./
+COPY ui/src ./src
+RUN npm run build
+
+
+FROM ghcr.io/astral-sh/uv:python3.12-trixie-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -35,7 +45,12 @@ SentenceTransformer('Qwen/Qwen3-Embedding-0.6B')" \
  && find /opt/hf -name '*.lock' -delete
 
 
-FROM python:3.12-slim-bookworm AS runtime
+# Debian 13, not 12. ECR's scan of a bookworm build found 4 critical and 15
+# high CVEs, every one in a Debian package (perl, openssl, util-linux, zlib) and
+# none in the app -- and apt-get upgrade changed nothing, because bookworm had
+# no fixed versions to upgrade to. The builder moves with it so the venv is
+# built against the same libc it runs on.
+FROM python:3.12-slim-trixie AS runtime
 
 # AML_ENV is not "local", so every AML_* variable must come from the task
 # definition; a missing one fails the container on the way up rather than one
@@ -61,6 +76,7 @@ COPY rag ./rag
 COPY scripts ./scripts
 COPY artifacts/model-HI-Small_Trans.pt ./artifacts/
 COPY data/seed ./data/seed
+COPY --from=ui /ui/dist ./ui/dist
 
 # The worker downloads the graph here, so it has to be writable by the run user.
 RUN useradd --create-home --uid 10001 aml \
