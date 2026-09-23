@@ -85,8 +85,11 @@ async def cases(limit: int = Query(50, ge=1, le=500)):
     happened to open it."""
     async with await psycopg.AsyncConnection.connect(DSN) as conn:
         rows = await (await conn.execute(
+            # jsonb_typeof, not IS NOT NULL: a case that short-circuits at
+            # typology `none` stores json.dumps(None), which is the jsonb scalar
+            # `null` -- present as far as SQL is concerned, and empty in fact.
             "SELECT case_id, alert_id, status, typology, created_at,"
-            " narrative IS NOT NULL AS has_narrative, verified"
+            " jsonb_typeof(narrative) = 'array' AS has_narrative, verified"
             " FROM cases ORDER BY created_at DESC LIMIT %s", (limit,))).fetchall()
     keys = ("case_id", "alert_id", "status", "typology", "created_at",
             "has_narrative", "verified")

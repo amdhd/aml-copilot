@@ -3,6 +3,10 @@ runs/
 .venv/
 node_modules/
 ui/dist/
+
+# pg_dump output. Not regenerable for free: the cases table holds narratives
+# and evidence bundles that cost provider calls to produce.
+backups/
 __pycache__/
 *.pyc
 .env
