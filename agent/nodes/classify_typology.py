@@ -5,15 +5,21 @@ import json
 from agent.llm import complete_json
 from agent.schemas import TypologyVerdict
 
+# Also node 3's retrieval query: guidance is looked up by what the typology
+# means, not by its enum name.
+DEFINITIONS = {
+    "structuring": "breaking a large sum into amounts below a reporting threshold",
+    "layering": "moving funds through intermediaries to obscure their origin",
+    "smurfing": "many small deposits across multiple people or accounts",
+    "trade_based": "value moved through mis-invoiced trade",
+    "rapid_movement": "funds arriving and leaving an account within a short window",
+    "none": "the evidence does not support any typology",
+}
+
 SYSTEM = """You are an AML analyst classifying a flagged transaction into one \
 laundering typology.
 
-structuring     - breaking a large sum into amounts below a reporting threshold
-layering        - moving funds through intermediaries to obscure their origin
-smurfing        - many small deposits across multiple people or accounts
-trade_based     - value moved through mis-invoiced trade
-rapid_movement  - funds arriving and leaving an account within a short window
-none            - the evidence does not support any typology
+""" + "\n".join(f"{k:<16}- {v}" for k, v in DEFINITIONS.items()) + """
 
 Rules:
 - Judge only from the evidence given. Do not invent accounts, amounts or dates.

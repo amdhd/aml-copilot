@@ -26,13 +26,30 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
+def _paragraphs(text: str) -> list[str]:
+    """Blank-line paragraphs, with an oversized one split before each bullet.
+
+    FFIEC Appendix F extracts as one paragraph per page -- no blank lines, and
+    each red flag a `•` item wrapped across several lines -- so every page came
+    out as one ~2,400-char chunk mixing a dozen flags into one embedding.
+    Splitting at the bullet keeps each flag whole; prose without bullets is
+    untouched."""
+    out = []
+    for para in re.split(r"\n\s*\n", text):
+        para = para.strip()
+        if len(para) > TARGET_CHARS:
+            out += [p.strip() for p in re.split(r"\n(?=•)", para)]
+        else:
+            out.append(para)
+    return out
+
+
 def chunk(text: str) -> list[str]:
     """Merge paragraphs up to TARGET_CHARS. Splitting a provision mid-sentence is
     how a model ends up applying half a rule."""
     text = re.sub(r"[ \t]+", " ", text)
     out, buf = [], ""
-    for para in re.split(r"\n\s*\n", text):
-        para = para.strip()
+    for para in _paragraphs(text):
         if len(para) < 40:                       # page numbers, headers
             continue
         if len(buf) + len(para) > TARGET_CHARS and buf:

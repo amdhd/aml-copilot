@@ -9,6 +9,7 @@ import psycopg
 from pgvector.psycopg import register_vector
 from sentence_transformers import SentenceTransformer
 
+from agent.nodes.classify_typology import DEFINITIONS
 from db import DSN
 from rag.ingest import MODEL
 
@@ -24,11 +25,15 @@ def _embedder():
 
 
 def retrieve_guidance(state: dict) -> dict:
+    # Red flags for the typology, not report-writing advice. The query used to
+    # end "what must a SAR narrative describe?", which pulled FinCEN's writing
+    # guide into 2-3 of the 4 slots for every typology once red-flag documents
+    # were in the corpus. The payment format stays: FFIEC lists red flags by it.
     alert = next(v for v in state["evidence"].values() if v["kind"] == "alert")
-    query = (f"{state['typology']} money laundering indicators. "
-             f"Transaction of {alert['amount']} {alert['currency']} by "
-             f"{alert['payment_format']}. What must a suspicious activity report "
-             f"narrative describe?")
+    typology = state["typology"]
+    query = (f"Red flags and indicators of {typology.replace('_', ' ')} money "
+             f"laundering: {DEFINITIONS[typology]}. Payment by "
+             f"{alert['payment_format']}.")
 
     vector = _embedder().encode([query], prompt_name="query",
                                 show_progress_bar=False)[0]
