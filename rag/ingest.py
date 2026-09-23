@@ -12,7 +12,7 @@ import psycopg
 from pgvector.psycopg import register_vector
 from sentence_transformers import SentenceTransformer
 
-from ml.score_batch import DSN
+from db import DSN
 
 CORPUS = Path("data/corpus")
 MODEL = "Qwen/Qwen3-Embedding-0.6B"

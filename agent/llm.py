@@ -8,13 +8,21 @@ prefix stays stable and provider-side prompt caching can hit it.
 import json
 import os
 
+from config import DEPLOYED, env
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
 
-BASE_URL = os.environ.get(
+BASE_URL = env(
     "AML_LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
-MODEL = os.environ.get("AML_LLM_MODEL", "gemini-flash-latest")
+MODEL = env("AML_LLM_MODEL", "gemini-flash-latest")
 _client = None
+
+# The key is read lazily below, which is right locally -- importing this module
+# should not require a provider. Deployed, lazy means the first case fails ~8s
+# in, after the worker has already reported itself healthy, so it is checked on
+# the way up instead.
+if DEPLOYED and not (os.environ.get("AML_LLM_API_KEY") or os.environ.get("GEMINI_API_KEY")):
+    raise RuntimeError("set AML_LLM_API_KEY in the task definition")
 
 
 def client() -> OpenAI:

@@ -107,8 +107,12 @@ def main():
     Path("artifacts").mkdir(exist_ok=True)
     # Keyed on the dataset: a smoke run must never overwrite a real model.
     out = Path("artifacts") / f"model-{Path(args.csv).stem}.pt"
+    # categories travels with the weights: in_dim alone says how wide the input
+    # is, not which category each column stands for, and inference has to
+    # rebuild the same columns from a CSV that may not contain all of them.
     torch.save({"state_dict": best_state, "in_dim": data.num_features,
-                "hidden": args.hidden, "threshold": float(best_threshold_)}, out)
+                "hidden": args.hidden, "threshold": float(best_threshold_),
+                "categories": data.categories}, out)
     print(f"saved {out}")
 
 

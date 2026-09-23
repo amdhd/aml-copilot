@@ -26,6 +26,12 @@ worker:
 ask:
 	$(UV) run python -m scripts.ask $(MSG)
 
+seed:
+	$(UV) run python -m scripts.make_seed $(ARGS)
+
+load-seed:
+	$(UV) run python -m scripts.load_seed $(ARGS)
+
 test:
 	$(UV) run pytest
 
@@ -40,4 +46,4 @@ smoke:
 	$(MAKE) train CSV=data/smoke_Trans.csv ARGS="--epochs 5"
 	$(MAKE) baseline CSV=data/smoke_Trans.csv
 
-.PHONY: train baseline score api worker ask test eval tensorboard smoke
+.PHONY: train baseline score api worker ask seed load-seed test eval tensorboard smoke

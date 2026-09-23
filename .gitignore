@@ -1,4 +1,9 @@
-data/
+# data/ holds the 475MB IBM CSV and the 1.8GB graph cache, neither of which
+# belongs in git. data/seed/ is the exception: 97KB of reduced demo data that
+# section 9's spin-up loads, regenerable only from a full local Postgres, and
+# the thing that lets someone else clone this repo and run the demo.
+data/*
+!data/seed/
 runs/
 .venv/
 node_modules/
