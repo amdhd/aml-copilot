@@ -1,5 +1,5 @@
 # data/ holds the 475MB IBM CSV and the 1.8GB graph cache, neither of which
-# belongs in git. data/seed/ is the exception: 97KB of reduced demo data that
+# belongs in git. data/seed/ is the exception: 1.8MB of reduced demo data that
 # section 9's spin-up loads, regenerable only from a full local Postgres, and
 # the thing that lets someone else clone this repo and run the demo.
 data/*
@@ -8,6 +8,7 @@ runs/
 .venv/
 node_modules/
 ui/dist/
+.DS_Store
 
 # pg_dump output. Not regenerable for free: the cases table holds narratives
 # and evidence bundles that cost provider calls to produce.
