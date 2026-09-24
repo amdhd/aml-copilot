@@ -69,9 +69,10 @@ Each cited chunk was read against its sentence and contains the pattern the sent
 states. Three things that are true of these citations and belong with the count:
 
 - **Citations make a wrong answer look better grounded, not more right.** Fixture
-  4385373 is labelled `none`; the classifier said `layering`, and its narrative now
-  cites three layering red flags. The verifier checks that the red flag exists and sits
-  beside real transactions. It cannot check that the red flag applies.
+  4385373 is labelled `none`; the classifier said `layering`, and three sentences of
+  its narrative now cite a FinCEN layering red flag. The verifier checks that the red
+  flag exists and sits beside real transactions. It cannot check that the red flag
+  applies.
 - **Rapid movement leans on a virtual-asset document.** Its closest match is FATF's
   *Virtual Assets* indicator for "multiple high-value transactions in short
   succession", cited here for fiat wires, ACH and cheques. The wording fits; the
