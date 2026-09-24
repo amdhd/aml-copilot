@@ -10,7 +10,7 @@ entity's transaction context, identifying which laundering typology it matches, 
 it against regulatory guidance, and drafting a narrative. **This system does the
 gathering and drafting; the analyst decides.** Nothing is auto-filed.
 
-**Status: weeks 1–7 of 8 complete.** A GAT scores 5.08M transactions into a Postgres
+**Status: all 8 weeks built; the analyst-time comparison is not yet recorded.** A GAT scores 5.08M transactions into a Postgres
 alert queue; a deterministic LangGraph workflow gathers evidence, classifies the
 laundering typology, retrieves regulatory guidance, drafts a cited SAR narrative,
 verifies every citation in plain Python, and parks the case at a human gate for an

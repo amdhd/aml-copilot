@@ -327,9 +327,9 @@ half price. Do not hardcode cost figures in the README; report measured token us
 | ~~3~~ **DONE** | API + worker + nodes 1–2 | ✅ Cases run end to end via FastAPI → Redis → arq → LangGraph. 2026-09-04 |
 | ~~4~~ **DONE** | RAG corpus + nodes 3–4 | ✅ FinCEN ingested to pgvector; narratives draft with sentence-level citations. Corpus incomplete — see §13. 2026-09-04 |
 | ~~5~~ **DONE** | Verifier + human gate + evals | ✅ Citation validity 100% (49/49), 0 hallucinated entities; run pauses at the gate and resumes. 2026-09-04 |
-| 6 ← **next** | UI | Four screens, subgraph renders |
-| 7 | Terraform + deploy | Running on Fargate |
-| 8 | Buffer | README, demo script, before/after metrics |
+| ~~6~~ **DONE** | UI | ✅ Queue, case with citations on hover, subgraph, approve/reject. 2026-09-22 |
+| ~~7~~ **DONE** | Terraform + deploy | ✅ Case run end to end through the ALB on Fargate, then destroyed clean. 2026-09-23 |
+| 8 ← **now** | Buffer | README ✅, demo script ✅, before/after ✅ protocol — analyst timing not yet recorded |
 
 Week 8 is buffer, not scope. Something in weeks 1–7 will overrun.
 
@@ -366,7 +366,7 @@ aml-copilot/
 
 ---
 
-## 12. Status — Weeks 1–5 complete (2026-09-04)
+## 12. Status — Weeks 1–7 complete, week 8 nearly (2026-09-24)
 
 Built, 384 lines across five files. Nothing downstream scaffolded.
 
@@ -475,11 +475,31 @@ stops at `awaiting_review` with 7 checkpoints in Postgres, then resumes to
 | Prompt cache hit rate | report | 0.0% |
 | Provider errors | report | 0 |
 
-### Next task — Week 6 only. Do not scaffold anything else.
+The eval table above is the week 5 run. The current one is in the README.
 
-Four screens: alert queue, case view with citations on hover, subgraph, approve
-/ reject. No auth. Read §13 first — the typology classifier is the weak part and
-the UI must not present its output as more certain than it is.
+**Week 6 added:** `ui/` — React, four screens, served by Vite in development and by
+the API in deployment. Confidence is shown with a warning, never as a triage signal.
+
+**Week 7 added:**
+
+```
+infra/persistent/   VPC, ECR, S3, SSM, IAM, $20 budget -- applied, ~$0.20/mo
+infra/ephemeral/    RDS, ALB, ECS api + Redis sidecar, Spot worker -- ~$0.11/hr
+infra/diagram.py    architecture.png
+Dockerfile          one image: api, worker, seed; UI built in; Debian trixie
+data/seed/          1,080 txns, 51 alerts, the guidance corpus
+```
+
+**Week 8 added:** red-flag corpus (FATF TBML, FATF virtual assets, FFIEC
+Appendix F/G) and the rule that guidance is cited beside case evidence, never
+alone; `make push` / `demo-up` / `demo-down`; `docs/demo-script.md`;
+`docs/analyst-time.md`.
+
+### Next task — record analyst time, then stop
+
+Run `docs/analyst-time.md` and put the numbers in the README with its caveats.
+Nothing else is in scope: the list of what would come next is in the demo
+script's "What would you do next?", and none of it is week 8.
 
 ---
 
@@ -489,7 +509,94 @@ Things learned by building it that were not knowable from the plan.
 
 ---
 
+### Week 8 — buffer
+
+#### Narratives never cited guidance, for three reasons stacked (2026-09-24)
+
+0 citations to guidance across 16 drafted narratives. Week 4 blamed the corpus, and
+that was one reason of three:
+
+1. **Corpus.** FinCEN's SAR guide alone. Three documents added by hand (FATF TBML,
+   FATF virtual assets, FFIEC Appendix F/G); only FFIEC pages 345–356 of 442, since
+   the rest is examination procedure and would crowd a top-4.
+2. **Chunker.** It split only at blank lines, and FFIEC extracts with none, so each
+   page became one ~2,400-char chunk mixing a dozen red flags. Oversized paragraphs
+   now split at `•`; the other documents chunk byte-identically.
+3. **Query and prompt.** The query ended "what must a SAR narrative describe?" and
+   pulled the writing guide into 2–3 of 4 slots even after (1) and (2). The prompt's
+   only citation instruction — "cite only these ids" — sat on the case facts. Both
+   were changed in one step, so which of the two mattered more is not known.
+
+Also wrong in week 4: FinCEN chunk #12 is not writing advice. It is a genuine list of
+common patterns inside the writing guide, and it now takes most citations.
+
+**Guidance can support a sentence, not carry it.** A sentence whose only ids are
+guidance fails verification — every id would resolve while nothing from the case
+supported it. That rule is in `verify.py`, not the prompt.
+
+Result: 7/7 narratives cite a red flag, 186/186 citations resolve, 0 guidance-only
+sentences. Typology accuracy did not move and could not: classification runs before
+retrieval. The week 4 caution stands — the classifier is grounded in its prompt, not
+in guidance.
+
+#### Citations make a wrong answer look better grounded
+
+4385373 is labelled `none` — a recurring ~100 USD payment. On the run that added
+red flags it was classified `layering`, and three sentences cited a real FinCEN
+layering red flag beside real transactions. Every check passed. This is §13 week 3's
+"the verifier cannot catch faulty reasoning" with regulatory references attached,
+and it is worse for them: a reviewer skimming citations sees a regulator's language.
+
+Related: rapid movement's best match is FATF's *virtual-asset* indicator for
+"multiple high-value transactions in short succession", cited for fiat wires and
+cheques. The wording fits; the document's scope does not.
+
+#### "Confidence is inverted" did not survive one more run
+
+Week 6 found every answer above 0.65 wrong. The next run's top answer (0.85) was
+right, a wrong one scored 0.82 and a right one 0.40. Uncalibrated, with an ordering
+that changes run to run — the UI said "its most confident answers have been its
+wrong ones" and now does not. Eight fixtures cannot establish a pattern in
+confidence, and a single run should not have been written up as one.
+
+#### The worker lost a start-up race on every fresh deploy
+
+The worker reaches Redis through a Cloud Map name that exists ~70s after apply.
+arq's default of 5 retries, 1s apart, gave up at 5s; ECS replaced the worker and the
+second one started. Retries are now 60 at 2s. `make demo-up` reports replacements,
+and the first run after the fix showed 0.
+
+---
+
 ### Week 7 — deploy
+
+#### The seed would have deployed a copilot with no guidance (2026-09-23)
+
+The seed held transactions and alerts but not the guidance table. On a fresh RDS,
+node 3 retrieves nothing and the narrative drafts anyway — an empty retrieval is not
+an error, so nothing would have failed. The seed now carries the corpus with its
+embeddings, and a load into an empty database hashes identical to the source.
+
+#### A Makefile let `.env` beat the command line, and truncated the local database
+
+`AML_DSN=<scratch> make load-seed` ran against the database in `.env`, because a
+makefile assignment outranks an environment variable. `load_seed` truncates before it
+copies: 5,078,345 transactions and 57,019 alerts became 1,080 and 51. Both were rebuilt
+from the CSV and the checkpoint, and all 51 seed alerts came back field-for-field
+identical. `.env` now loads as `?=` defaults. The lesson is the order of operations:
+check which database a destructive command will reach before running it.
+
+#### `apt-get upgrade` could not fix the base image
+
+ECR's scan of the bookworm image: 4 critical, 15 high, all in Debian packages. The
+upgrade changed nothing because bookworm had no fixed versions. Moving both stages to
+trixie took it to 0 critical, 2 high.
+
+#### Docker Desktop's pushes are three manifests, and the lifecycle rule counted them
+
+An OCI index, the image, and a build attestation — two untagged. "Keep the last 3
+images" over any tag status would eventually have expired pieces of the live tag.
+Images are now pushed with `--provenance=false`, and the rule counts tagged images.
 
 #### `txn_id` is a graph position, and that makes the graph unsubsettable (2026-09-22)
 
@@ -564,6 +671,8 @@ that drafted nothing both classified `none` and short-circuited, which is the
 design working, not a failure.
 
 #### Confidence is not merely uncalibrated, it is inverted
+
+*Did not hold on the next run — see week 8.*
 
 Worth restating with this run's numbers, because it is sharper than "not
 calibrated" and it constrains the UI.
@@ -983,6 +1092,8 @@ stated rather than reported as a genuine zero.
 ### Week 4 — RAG, narrative drafting
 
 #### The corpus is incomplete and this is the main gap
+
+*Resolved in week 8, which also found the corpus was one of three causes.*
 
 Only FinCEN's SAR narrative guidance is ingested (33 pages, 48 chunks). **FATF and
 FFIEC both sit behind Cloudflare bot protection** and return 403 to any automated
