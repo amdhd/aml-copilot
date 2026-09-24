@@ -1,9 +1,10 @@
 # Ephemeral layer (plan section 9): `apply` before a demo, `destroy` after.
 # Everything that bills by the hour is here and nowhere else.
 #
-#   terraform apply -var image_tag=<git sha>
-#   aws ecs run-task ... (the seed task, see outputs.seed_command)
-#   terraform destroy
+#   make demo-up     apply, run the seed task, wait until it serves
+#   make demo-down   destroy, then check nothing is left billing
+#
+# scripts/demo.sh does the work; the image tag is the git commit.
 
 terraform {
   required_version = ">= 1.6"
@@ -245,7 +246,7 @@ resource "aws_ecs_task_definition" "worker" {
   }])
 }
 
-# seed task: one-shot, run by hand after apply (outputs.seed_command).
+# seed task: one-shot, run by scripts/demo.sh after apply.
 resource "aws_ecs_task_definition" "seed" {
   family                   = "${local.name}-seed"
   requires_compatibilities = ["FARGATE"]
