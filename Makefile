@@ -52,4 +52,13 @@ smoke:
 	$(MAKE) train CSV=data/smoke_Trans.csv ARGS="--epochs 5"
 	$(MAKE) baseline CSV=data/smoke_Trans.csv
 
-.PHONY: train baseline score api worker ask seed load-seed test eval tensorboard smoke
+push:
+	./scripts/demo.sh push
+
+demo-up:
+	./scripts/demo.sh up
+
+demo-down:
+	./scripts/demo.sh down
+
+.PHONY: push demo-up demo-down train baseline score api worker ask seed load-seed test eval tensorboard smoke

@@ -243,23 +243,22 @@ aws ssm put-parameter --name /aml-copilot/llm-api-key --type SecureString \
   --overwrite --value "$(grep '^AML_LLM_API_KEY=' ../../.env | cut -d= -f2-)"
 ```
 
-Then push the image (tagged with the commit it was built from) and upload the graph
-cache the worker fetches on start-up:
+Then upload the graph cache the worker fetches on start-up:
 
 ```bash
-docker build --provenance=false -t aml-copilot .
-docker tag aml-copilot <ecr_repository_url>:<git sha> && docker push <ecr_repository_url>:<git sha>
 aws s3 cp data/HI-Small_Trans.None.graph.pt s3://<artifacts_bucket>/graph/<sha256[:16]>/HI-Small_Trans.None.graph.pt
 ```
 
-**Per demo** (~6 minutes, most of it RDS):
+**Per demo** (~6 minutes, most of it RDS). The image is tagged with the current git
+commit, so push once per commit you want to run:
 
 ```bash
-cd infra/ephemeral && terraform init && terraform apply -var image_tag=<git sha>
-# run the seed_command it prints -- loads 1,080 txns, 51 alerts, 121 guidance chunks
-# open the url it prints
-terraform destroy -var image_tag=<git sha>
+make push        # build and push this commit's image (refuses with uncommitted changes)
+make demo-up     # apply, seed RDS, wait for the API and worker, print the URL
+make demo-down   # destroy, then check no RDS, ALB, ECS cluster or elastic IP remains
 ```
+
+`demo-up` and `demo-down` each ask before touching billed resources.
 
 Choices worth defending:
 
