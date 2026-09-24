@@ -18,6 +18,19 @@ analyst to approve or reject in the UI. It deploys to ECS Fargate with Terraform
 [Deploy](#deploy-aws). See [aml-copilot-build-plan.md](aml-copilot-build-plan.md) for
 the design and §13 for findings that changed it.
 
+### The UI
+
+The alert queue, highest GNN risk score first, test split only:
+
+![Alert queue: 50 alerts ranked by GNN risk score, with sender, receiver, amount and same-account transfers labelled](docs/screenshots/alert-queue.png)
+
+A case parked at the human gate. The suggested typology carries a warning not to triage
+on it; every narrative sentence carries the evidence ids it rests on, including the red
+flag it matches (hover one to resolve it against the bundle); below is the GNN
+neighbourhood the model attended to:
+
+![Case view: suggested typology with a calibration warning, a verified SAR narrative with per-sentence citations, and the GNN subgraph](docs/screenshots/case-view.png)
+
 ## Agent eval results
 
 `make eval` — 8 fixtures, labelled by inspecting each account's transaction pattern
