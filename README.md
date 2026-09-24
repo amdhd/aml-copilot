@@ -10,7 +10,7 @@ entity's transaction context, identifying which laundering typology it matches, 
 it against regulatory guidance, and drafting a narrative. **This system does the
 gathering and drafting; the analyst decides.** Nothing is auto-filed.
 
-**Status: weeks 1–7 of 8 complete.** A GAT scores 5.08M transactions into a Postgres
+**Status: all 8 weeks built; the analyst-time comparison is not yet recorded.** A GAT scores 5.08M transactions into a Postgres
 alert queue; a deterministic LangGraph workflow gathers evidence, classifies the
 laundering typology, retrieves regulatory guidance, drafts a cited SAR narrative,
 verifies every citation in plain Python, and parks the case at a human gate for an
@@ -69,9 +69,10 @@ Each cited chunk was read against its sentence and contains the pattern the sent
 states. Three things that are true of these citations and belong with the count:
 
 - **Citations make a wrong answer look better grounded, not more right.** Fixture
-  4385373 is labelled `none`; the classifier said `layering`, and its narrative now
-  cites three layering red flags. The verifier checks that the red flag exists and sits
-  beside real transactions. It cannot check that the red flag applies.
+  4385373 is labelled `none`; the classifier said `layering`, and three sentences of
+  its narrative now cite a FinCEN layering red flag. The verifier checks that the red
+  flag exists and sits beside real transactions. It cannot check that the red flag
+  applies.
 - **Rapid movement leans on a virtual-asset document.** Its closest match is FATF's
   *Virtual Assets* indicator for "multiple high-value transactions in short
   succession", cited here for fiat wires, ACH and cheques. The wording fits; the
