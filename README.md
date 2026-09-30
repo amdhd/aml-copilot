@@ -284,8 +284,8 @@ make demo-down   # destroy, then check no RDS, ALB, ECS cluster or elastic IP re
 ```
 
 `demo-up` and `demo-down` each ask before touching billed resources, and `demo-up`
-refuses outright once this month's spend, actual or forecast and before credits, is over
-$5. The ALB admits only the public IP `demo-up` runs from; add others with
+refuses outright once this project's spend this month, actual or forecast and before
+credits, is over $5. The ALB admits only the public IP `demo-up` runs from; add others with
 `EXTRA_CIDRS=198.51.100.4/32 make demo-up`.
 
 Choices worth defending:

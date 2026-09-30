@@ -354,6 +354,17 @@ resource "aws_iam_role_policy" "task_s3" {
 
 # --- Budget ----------------------------------------------------------------
 #
+# Counts this project only. The account also runs other work -- Bedrock alone
+# was ~$24 of $30.64 in September 2026 -- and an account-wide figure would
+# stop demo-up for spend that is not this project's. Every resource carries
+# Project = aml-copilot (default_tags in both layers); billing attributes cost
+# to a tag only once it is activated, and only from then on.
+
+resource "aws_ce_cost_allocation_tag" "project" {
+  tag_key = "Project"
+  status  = "Active"
+}
+#
 # Before the first ephemeral apply, not after the first surprise (section 9).
 # The steady state here is ~$2-4/mo, so crossing 50% of $20 means something
 # expensive was left running.
@@ -370,6 +381,12 @@ resource "aws_budgets_budget" "monthly" {
   cost_types {
     include_credit = false
   }
+
+  cost_filter {
+    name   = "TagKeyValue"
+    values = [format("user:Project$%s", local.name)]
+  }
+  depends_on = [aws_ce_cost_allocation_tag.project]
 
   dynamic "notification" {
     for_each = [
