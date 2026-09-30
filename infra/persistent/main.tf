@@ -253,38 +253,44 @@ resource "aws_acm_certificate_validation" "demo" {
   validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
 }
 
-# --- LLM key ---------------------------------------------------------------
+# --- App parameters --------------------------------------------------------
 #
-# SSM SecureString rather than Secrets Manager: free at this tier against
-# $0.40/mo. Terraform creates it with a placeholder and never manages the value
-# again, so the real key is set from the CLI and never enters Terraform state:
+# The LLM key and the reviewer logins (api/auth.py: username -> PBKDF2 hash,
+# as JSON) are SSM SecureStrings -- free at this tier, against $0.40/mo each
+# for Secrets Manager -- created and set from the CLI only (README, Deploy):
 #
 #   aws ssm put-parameter --name /aml-copilot/llm-api-key --type SecureString \
 #     --overwrite --value "$KEY"
+#   aws ssm put-parameter --name /aml-copilot/reviewers --type SecureString \
+#     --overwrite --value "$(uv run python -m api.auth alice bob)"
+#
+# Terraform used to create them with a placeholder and ignore_changes on the
+# value, on the understanding that the real value would then never enter its
+# state. It did: every plan refreshes an aws_ssm_parameter, decrypting the
+# value into terraform.tfstate. Write-only values (value_wo) would avoid that
+# for new parameters, but moving an existing one onto them sends the
+# write-only value -- the placeholder -- over the real key. So Terraform no
+# longer manages them at all; the task definitions address them by name.
+#
+# The removed blocks drop them from state without deleting them from AWS.
+# They can go once every copy of the state has been applied past them.
 
-resource "aws_ssm_parameter" "llm_api_key" {
-  name  = "/${local.name}/llm-api-key"
-  type  = "SecureString"
-  value = "set-me-from-the-cli"
+removed {
+  from = aws_ssm_parameter.llm_api_key
   lifecycle {
-    ignore_changes = [value]
+    destroy = false
   }
 }
 
-# Reviewer logins (api/auth.py): username -> PBKDF2 hash, as JSON. Same
-# arrangement as the key above; the placeholder is not JSON, so an api task
-# started before it is set fails on the way up rather than admitting anyone.
-#
-#   aws ssm put-parameter --name /aml-copilot/reviewers --type SecureString \
-#     --overwrite --value "$(uv run python -m api.auth alice bob)"
-
-resource "aws_ssm_parameter" "reviewers" {
-  name  = "/${local.name}/reviewers"
-  type  = "SecureString"
-  value = "set-me-from-the-cli"
+removed {
+  from = aws_ssm_parameter.reviewers
   lifecycle {
-    ignore_changes = [value]
+    destroy = false
   }
+}
+
+locals {
+  parameters = "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}"
 }
 
 # --- IAM -------------------------------------------------------------------

@@ -49,7 +49,8 @@ def load_reviewers() -> dict | None:
     try:
         reviewers = json.loads(raw)
     except json.JSONDecodeError:
-        # The SSM placeholder lands here: fail on the way up, not per request.
+        # A value set by hand but not with api.auth: fail on the way up, not
+        # per request.
         raise RuntimeError("AML_REVIEWERS is not JSON -- set it with "
                            "`python -m api.auth <names>`") from None
     if not isinstance(reviewers, dict) or not reviewers:
