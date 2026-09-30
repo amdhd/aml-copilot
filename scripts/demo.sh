@@ -41,9 +41,17 @@ up() {
     echo "no image $TAG in ECR -- run make push first"
     exit 1
   fi
-  confirm "Create the demo stack for $TAG? It bills ~\$0.11/hr until demo-down."
+  # The ALB admits the address this runs from, for this demo only. EXTRA_CIDRS
+  # adds others, comma-separated, e.g. an interviewer's: EXTRA_CIDRS=198.51.100.4/32
+  ip=$(curl -sf https://checkip.amazonaws.com)
+  echo "$ip" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$' \
+    || { echo "could not determine this machine's public IPv4 address"; exit 1; }
+  cidrs="\"$ip/32\""
+  for extra in $(echo "${EXTRA_CIDRS:-}" | tr ',' ' '); do cidrs="$cidrs,\"$extra\""; done
+
+  confirm "Create the demo stack for $TAG, reachable from [$cidrs]? It bills ~\$0.11/hr until demo-down."
   $TF init -input=false >/dev/null
-  $TF apply -input=false -auto-approve -var image_tag="$TAG"
+  $TF apply -input=false -auto-approve -var image_tag="$TAG" -var "allowed_cidrs=[$cidrs]"
 
   url=$($TF output -raw url)
   cluster=$($TF output -raw cluster)
@@ -88,8 +96,9 @@ up() {
 down() {
   confirm "Destroy the demo stack?"
   $TF init -input=false >/dev/null
-  # image_tag is required by the config but plays no part in a destroy.
-  $TF destroy -input=false -auto-approve -var image_tag="$TAG"
+  # image_tag and allowed_cidrs are required by the config but play no part in
+  # a destroy.
+  $TF destroy -input=false -auto-approve -var image_tag="$TAG" -var 'allowed_cidrs=[]'
 
   # Section 9: check, rather than trust, that nothing is left billing. By name,
   # not by tag: deregistered task definitions keep their tags forever.

@@ -85,28 +85,23 @@ resource "aws_route_table_association" "public" {
 # --- Security groups -------------------------------------------------------
 #
 # The chain is ALB -> tasks -> RDS, each hop allowing only the one before.
-# The ALB is the only thing reachable from outside, and only from
-# var.allowed_cidrs: the UI has no auth, and every case opened spends DeepSeek
-# credit.
+# The ALB is the only thing reachable from outside, and only from the addresses
+# a demo is run for: every case opened spends DeepSeek credit.
+#
+# Its ingress rules are ephemeral (aws_vpc_security_group_ingress_rule in
+# infra/ephemeral), written by each demo-up for the IP it runs from. A fixed
+# home IP here outlived the demos it was for, and kept access wherever the ISP
+# reassigned it. No ingress block here, and there must never be one: inline
+# rules make this resource authoritative for ingress, and the next apply would
+# delete the ephemeral layer's rules. Omitted, the provider leaves ingress
+# alone -- which is also why the old inline /32 rule, once removed from here,
+# still had to be revoked by hand.
 
 resource "aws_security_group" "alb" {
   name        = "${local.name}-alb"
   description = "Demo ALB, reachable from allowed_cidrs only"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
-    description = "Redirected to 443 by the listener"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_cidrs
-  }
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_cidrs
-  }
   egress {
     from_port   = 0
     to_port     = 0

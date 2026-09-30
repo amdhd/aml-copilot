@@ -133,6 +133,21 @@ resource "aws_lb_target_group" "api" {
   deregistration_delay = 5
 }
 
+# The persistent layer's ALB group holds no ingress of its own. These rules are
+# the demo's: written for the addresses it runs from, gone with the destroy.
+resource "aws_vpc_security_group_ingress_rule" "alb" {
+  for_each = {
+    for pair in setproduct(var.allowed_cidrs, [80, 443]) :
+    "${pair[0]}:${pair[1]}" => { cidr = pair[0], port = pair[1] }
+  }
+  security_group_id = local.p.alb_sg_id
+  cidr_ipv4         = each.value.cidr
+  from_port         = each.value.port
+  to_port           = each.value.port
+  ip_protocol       = "tcp"
+  description       = each.value.port == 80 ? "Redirected to 443" : "HTTPS"
+}
+
 # Port 80 only redirects. Nothing, a login least of all, is served over it.
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn

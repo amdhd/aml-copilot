@@ -18,7 +18,3 @@ variable "hostname" {
   type        = string
 }
 
-variable "allowed_cidrs" {
-  description = "Who can reach the ALB. The UI has no auth and each case spends LLM credit, so not 0.0.0.0/0."
-  type        = list(string)
-}
