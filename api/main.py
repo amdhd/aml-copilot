@@ -120,17 +120,23 @@ async def healthz():
 @app.get("/alerts")
 async def alerts(limit: int = Query(20, ge=1, le=1000)):
     """The queue, highest model risk first. Test split only: train-period scores
-    are in-sample and not honest."""
+    are in-sample and not honest.
+
+    Each alert carries its latest case, if any, so the queue can open that
+    case instead of paying for a second run that may answer differently."""
     async with await psycopg.AsyncConnection.connect(DSN) as conn:
         rows = await (await conn.execute(
-            "SELECT txn_id, ts, src_account, dst_account, amount, currency,"
-            " payment_format, risk_score FROM alerts"
-            " WHERE split = 'test' ORDER BY risk_score DESC LIMIT %s", (limit,))).fetchall()
+            "SELECT a.txn_id, a.ts, a.src_account, a.dst_account, a.amount, a.currency,"
+            " a.payment_format, a.risk_score, c.case_id, c.status FROM alerts a"
+            " LEFT JOIN LATERAL (SELECT case_id, status FROM cases"
+            "   WHERE alert_id = a.txn_id ORDER BY created_at DESC LIMIT 1) c ON true"
+            " WHERE a.split = 'test' ORDER BY a.risk_score DESC LIMIT %s",
+            (limit,))).fetchall()
     # is_laundering is the ground-truth label; exposing it would hand the demo
     # analyst the answer the investigation is supposed to find.
     keys = ("alert_id", "timestamp", "src_account", "dst_account", "amount",
-            "currency", "payment_format", "risk_score")
-    return [dict(zip(keys, r)) for r in rows]
+            "currency", "payment_format", "risk_score", "case_id", "case_status")
+    return [dict(zip(keys, (*r[:8], r[8] and str(r[8]), r[9]))) for r in rows]
 
 
 @app.get("/cases")

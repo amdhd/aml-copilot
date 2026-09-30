@@ -17,8 +17,9 @@ REPO=$(terraform -chdir=infra/persistent output -raw ecr_repository_url)
 REGION=$(terraform -chdir=infra/persistent output -raw region)
 export AWS_REGION="$REGION"
 
-# demo-up refuses once this month's spend, actual or forecast, passes this.
-# Read from the aml-copilot budget, which counts usage before credits.
+# demo-up refuses once this project's spend this month, actual or forecast,
+# passes this. Read from the aml-copilot budget, which counts usage before
+# credits and only what is tagged Project = aml-copilot.
 MAX_SPEND_USD=5
 
 spend_guard() {
@@ -87,6 +88,7 @@ up() {
   echo "seeding RDS..."
   task=$(aws ecs run-task --cluster "$cluster" --task-definition aml-copilot-seed \
     --launch-type FARGATE --network-configuration "$network" \
+    --propagate-tags TASK_DEFINITION \
     --query 'tasks[0].taskArn' --output text)
   aws ecs wait tasks-stopped --cluster "$cluster" --tasks "$task"
   code=$(aws ecs describe-tasks --cluster "$cluster" --tasks "$task" \

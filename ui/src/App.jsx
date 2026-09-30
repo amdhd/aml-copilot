@@ -29,6 +29,7 @@ export default function App() {
     try {
       const next = await getCase(caseId)
       setKase(next)
+      setError(null)            // a failure that has since recovered is not news
       return next
     } catch (e) { setError(e.message); return null }
   }, [caseId])
@@ -36,16 +37,25 @@ export default function App() {
   useEffect(() => { refresh() }, [refresh])
   useEffect(() => { putCaseInUrl(caseId) }, [caseId])
 
+  // An interval, not a timeout re-armed by each new `kase`: a refresh that
+  // failed left `kase` unchanged, so the timeout was never armed again and the
+  // page said "the worker is running it" after the worker had finished.
+  const settled = kase != null && SETTLED.includes(kase.status)
   useEffect(() => {
-    if (!kase || SETTLED.includes(kase.status)) return
-    const timer = setTimeout(refresh, 2000)
-    return () => clearTimeout(timer)
-  }, [kase, refresh])
+    if (!caseId || settled) return
+    const timer = setInterval(refresh, 2000)
+    return () => clearInterval(timer)
+  }, [caseId, settled, refresh])
 
   const open = async alertId => {
     setError(null); setKase(null)
     try { setCaseId((await createCase(alertId)).case_id) } catch (e) { setError(e.message) }
   }
+
+  // Back to the tab the case was opened from. A case page with no way off it
+  // left the URL bar as the only exit.
+  const back = () => { setCaseId(null); setKase(null); setError(null) }
+  const backLink = <button className="link" onClick={back}>← {view === 'cases' ? 'cases' : 'queue'}</button>
 
   return (
     <main>
@@ -58,27 +68,22 @@ export default function App() {
       {error && <p className="error">{error}</p>}
       {!caseId && (
         <nav className="tabs">
-          <button className={view === 'queue' ? 'tab on' : 'tab'} onClick={() => setView('queue')}>
+          <button className={view === 'queue' ? 'tab on' : 'tab'} onClick={() => { setView('queue'); setError(null) }}>
             Alert queue
           </button>
-          <button className={view === 'cases' ? 'tab on' : 'tab'} onClick={() => setView('cases')}>
+          <button className={view === 'cases' ? 'tab on' : 'tab'} onClick={() => { setView('cases'); setError(null) }}>
             Cases
           </button>
         </nav>
       )}
-      {!caseId && view === 'queue' && <AlertQueue onOpen={open} />}
+      {!caseId && view === 'queue' && <AlertQueue onOpen={open} onOpenCase={setCaseId} />}
       {!caseId && view === 'cases' && <CaseList onOpen={setCaseId} />}
-      {caseId && !kase && <p className="muted">Opening case…</p>}
-      {caseId && kase && !SETTLED.includes(kase.status) && (
+      {caseId && !settled && backLink}
+      {caseId && !kase && !error && <p className="muted">Opening case…</p>}
+      {caseId && kase && !settled && (
         <p className="muted">Case is {kase.status}; the worker is running it…</p>
       )}
-      {caseId && kase && SETTLED.includes(kase.status) && (
-        <CaseView
-          kase={kase}
-          onRefresh={refresh}
-          onBack={() => { setCaseId(null); setKase(null); setView('cases') }}
-        />
-      )}
+      {caseId && settled && <CaseView kase={kase} onRefresh={refresh} backLink={backLink} />}
     </main>
   )
 }

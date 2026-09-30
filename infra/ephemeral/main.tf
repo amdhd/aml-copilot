@@ -326,6 +326,10 @@ resource "aws_ecs_service" "api" {
   task_definition = aws_ecs_task_definition.api.arn
   desired_count   = 1
   launch_type     = "FARGATE"
+  # Fargate bills the task, not the service, and a task carries no tags unless
+  # given them. Without this, the project's biggest demo cost would fall
+  # outside the budget's Project filter (infra/persistent).
+  propagate_tags = "SERVICE"
 
   # Public IP because there is no NAT (persistent/main.tf): it is how the task
   # reaches ECR to pull its own image. The security group admits only the ALB.
@@ -350,6 +354,7 @@ resource "aws_ecs_service" "worker" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.worker.arn
   desired_count   = 1
+  propagate_tags  = "SERVICE"
 
   # Spot because run state lives in the Postgres checkpointer (section 8), not
   # in the task: a reclaimed worker loses its process, not the case.

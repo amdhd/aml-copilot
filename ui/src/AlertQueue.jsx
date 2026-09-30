@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { getAlerts } from './api'
+import { chip } from './CaseList.jsx'
 
 const money = (amount, currency) =>
   `${amount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency}`
@@ -13,9 +14,22 @@ const scale = (score, lo, hi) => (hi - lo < 1e-9 ? 1 : 0.06 + 0.94 * (score - lo
 
 // Screen 1: the queue, highest model risk first. The API already filters to the
 // test split -- train-period scores are in-sample and not honest.
-export default function AlertQueue({ onOpen }) {
+//
+// An alert that already has a case opens that case. Investigating it again
+// started a second run, which spends provider credit and, the classifier not
+// being deterministic, can come back with a different answer. A failed case is
+// the exception: running again is the retry.
+export default function AlertQueue({ onOpen, onOpenCase }) {
   const [alerts, setAlerts] = useState(null)
   const [error, setError] = useState(null)
+  // Opening takes a round trip before anything moves; without this the button
+  // looked dead and got clicked again.
+  const [opening, setOpening] = useState(null)
+
+  const investigate = async alertId => {
+    setOpening(alertId)
+    try { await onOpen(alertId) } finally { setOpening(null) }
+  }
 
   useEffect(() => {
     getAlerts().then(setAlerts).catch(e => setError(e.message))
@@ -40,7 +54,7 @@ export default function AlertQueue({ onOpen }) {
         <thead>
           <tr>
             <th>Risk score</th><th>Transaction</th><th>From</th><th>To</th>
-            <th className="num">Amount</th><th>When</th><th></th>
+            <th className="num">Amount</th><th>When</th><th>Case</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -60,7 +74,18 @@ export default function AlertQueue({ onOpen }) {
               </td>
               <td className="num">{money(a.amount, a.currency)}</td>
               <td className="muted when">{a.timestamp.replace('T', ' ').slice(0, 16)}</td>
-              <td><button onClick={() => onOpen(a.alert_id)}>Investigate</button></td>
+              <td>
+                {a.case_status
+                  ? <span className={chip(a.case_status)}>{a.case_status.replace('_', ' ')}</span>
+                  : <span className="muted">—</span>}
+              </td>
+              <td>
+                {a.case_id && a.case_status !== 'failed'
+                  ? <button onClick={() => onOpenCase(a.case_id)}>Open case</button>
+                  : <button disabled={opening !== null} onClick={() => investigate(a.alert_id)}>
+                      {opening === a.alert_id ? 'Opening…' : a.case_status === 'failed' ? 'Retry' : 'Investigate'}
+                    </button>}
+              </td>
             </tr>
           ))}
         </tbody>

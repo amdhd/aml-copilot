@@ -68,7 +68,7 @@ with Diagram("AML Investigation Copilot -- AWS (ECS Fargate)\n"
             with Cluster("Private subnets 10.40.10.0/24, 10.40.11.0/24\nno route out",
                          graph_attr=PRIVATE):
                 with Cluster("ephemeral", graph_attr=EPHEMERAL):
-                    rds = RDSPostgresqlInstance("RDS Postgres 16\n+ pgvector\nseed: 1,080 txns,\n51 alerts, 48 chunks")
+                    rds = RDSPostgresqlInstance("RDS Postgres 16\n+ pgvector\nseed: 1,080 txns,\n51 alerts, 121 chunks")
 
     analyst >> Edge(label="HTTPS") >> igw >> alb >> Edge(label=":8000") >> api
     api >> Edge(label="enqueue") >> redis

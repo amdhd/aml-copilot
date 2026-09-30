@@ -1,7 +1,16 @@
 import React, { useEffect, useState } from 'react'
-import { getCases } from './api'
+import { CASES_SHOWN, getCases } from './api'
 
-const chip = status => `chip chip-${status.replace('_', '-')}`
+// created_at is a timestamptz, sent in UTC. Cut to its first 16 characters it
+// read as local time -- eight hours out in Malaysia -- and looked like the
+// queue's timestamps, which are the dataset's own clock. Shown in the viewer's
+// zone, and labelled with it.
+const opened = iso => new Date(iso).toLocaleString(undefined, {
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+})
+
+export const chip = status => `chip chip-${status.replace('_', '-')}`
 
 // Cases already opened. Not one of the four screens in section 7, but a run
 // parked at the human gate waits hours or days -- without this it is reachable
@@ -24,7 +33,8 @@ export default function CaseList({ onOpen }) {
         <div>
           <h2>Cases</h2>
           <p className="muted">
-            {cases.length} opened{waiting > 0 && `, ${waiting} waiting on a decision`}.
+            {cases.length >= CASES_SHOWN ? `Showing the newest ${cases.length}` : `${cases.length} opened`}
+            {waiting > 0 && `, ${waiting} waiting on a decision`}.
           </p>
         </div>
       </div>
@@ -50,7 +60,7 @@ export default function CaseList({ onOpen }) {
                     </span>
                   : <span className="muted">none</span>}
               </td>
-              <td className="muted">{c.created_at.replace('T', ' ').slice(0, 16)}</td>
+              <td className="muted">{opened(c.created_at)}</td>
               <td><button onClick={() => onOpen(c.case_id)}>Open</button></td>
             </tr>
           ))}
