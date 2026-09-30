@@ -16,8 +16,8 @@ output "hostname" { value = var.hostname }
 output "ecr_repository_url" { value = aws_ecr_repository.app.repository_url }
 output "artifacts_bucket" { value = aws_s3_bucket.artifacts.bucket }
 output "log_group" { value = aws_cloudwatch_log_group.app.name }
-output "llm_api_key_arn" { value = aws_ssm_parameter.llm_api_key.arn }
-output "reviewers_arn" { value = aws_ssm_parameter.reviewers.arn }
+output "llm_api_key_arn" { value = "${local.parameters}/llm-api-key" }
+output "reviewers_arn" { value = "${local.parameters}/reviewers" }
 
 output "execution_role_arn" { value = aws_iam_role.execution.arn }
 output "task_role_arn" { value = aws_iam_role.task.arn }

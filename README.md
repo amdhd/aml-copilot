@@ -245,7 +245,7 @@ separate state:
 
 | Layer | Contains | Lifecycle | Approx. cost |
 |---|---|---|---|
-| `infra/persistent` | VPC, subnets, security groups, ECR, S3 (graph cache), log group, SSM key and reviewer logins, ACM certificate, IAM, $20 budget alarm | applied once | ~$0.20/mo |
+| `infra/persistent` | VPC, subnets, security groups, ECR, S3 (graph cache), log group, ACM certificate, IAM, $20 budget alarm | applied once | ~$0.20/mo |
 | `infra/ephemeral` | RDS Postgres 16 (`db.t4g.micro`), HTTPS ALB and its ingress rules, DNS alias, api task + Redis sidecar, worker on Fargate Spot, seed task | per demo | ~$0.11/hr |
 
 Estimates at on-demand `ap-southeast-1` prices when this was built; the budget alarm is
@@ -302,8 +302,12 @@ Choices worth defending:
   (`api/auth.py`), so an approval records who gave it. Basic auth rather than Cognito:
   one login check and a hash file, not a user pool, for a demo with a handful of
   reviewers. The allowlist is written per demo, because every case spends LLM credit.
-- **Secrets stay out of Terraform state and task definitions.** The LLM key and reviewer
-  hashes are set from the CLI; the DSN reaches containers through SSM.
+- **The LLM key and reviewer logins never touch Terraform.** They are set from the CLI
+  and the task definitions name them. Managing them in Terraform, even with the value
+  ignored, put the decrypted key into `terraform.tfstate` on every plan. The database
+  password is Terraform-generated, so it is in the ephemeral state while a demo is up;
+  `destroy` empties that state, and it reaches containers through SSM, not the task
+  definition.
 
 Verified end to end on 2026-09-23: a case through the public ALB parked at the human
 gate after 31s and resumed to `approved` from the RDS checkpoint.
