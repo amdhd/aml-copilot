@@ -35,28 +35,31 @@ neighbourhood the model attended to:
 
 `make eval` — 8 fixtures, labelled by inspecting each account's transaction pattern
 rather than by copying the dataset's per-transaction `Is Laundering` column (two of the
-eight disagree with it). Provider `deepseek-flash` on DeepSeek, run 2026-09-24.
+eight disagree with it). Provider `deepseek-flash` on DeepSeek, run 2026-09-30.
 
 | Metric | Target | Result |
 |---|---|---|
 | Typology accuracy | report | **4/8 (50%)** |
-| Citation validity | **100%** | **100.0% (186/186)** |
+| Citation validity | **100%** | **100.0% (155/155)** |
 | Hallucinated entities | **0** | **0** |
-| Narratives citing a red flag | report | **7/7** (15 cites) |
+| Narratives citing a red flag | report | **7/7** (11 cites) |
 | Guidance-only sentences | **0** | **0** |
+| Model-only sentences | **0** | **0** |
+| Unsupported accounts, amounts, dates | **0** | **0** (of 182 checked) |
 | Escalated after retry | report | 0 |
 | Provider errors | report | **0** |
-| p50 / p95 latency | report | 48.1s / 62.0s |
-| Tokens per case | report | 7,468 in, 3,538 out |
-| Prompt cache hit rate | report | 75.8% |
+| p50 / p95 latency | report | 53.1s / 62.4s |
+| Tokens per case | report | 7,609 in, 3,911 out |
+| Prompt cache hit rate | report | 77.0% |
 
-**Read these two numbers together.** Deterministic verification works: across 186
+**Read these two numbers together.** Deterministic verification works: across 155
 citations in 7 narratives, every `evidence_id` in every drafted sentence resolved to a
-fact the pipeline actually assembled, and no narrative named an account outside the
-evidence bundle. But the same run classified the typology correctly only four times in
-eight. **A perfectly cited narrative about the wrong typology is a perfectly cited wrong
-answer.** The verifier proves the narrative rests on real evidence; it proves nothing
-about whether the conclusion is right.
+fact the pipeline actually assembled, and every account, amount and date a sentence
+named — 78, 43 and 61 of them across 56 sentences — appears in a fact that same
+sentence cites. No draft needed its retry. But the same run classified the typology
+correctly only four times in eight. **A perfectly cited narrative about the wrong
+typology is a perfectly cited wrong answer.** The verifier proves the narrative rests
+on real evidence; it proves nothing about whether the conclusion is right.
 
 ### Red flags, cited beside the evidence
 
@@ -69,24 +72,23 @@ Each cited chunk was read against its sentence and contains the pattern the sent
 states. Three things that are true of these citations and belong with the count:
 
 - **Citations make a wrong answer look better grounded, not more right.** Fixture
-  4385373 is labelled `none`; the classifier said `layering`, and three sentences of
-  its narrative now cite a FinCEN layering red flag. The verifier checks that the red
-  flag exists and sits beside real transactions. It cannot check that the red flag
-  applies.
+  4385373 is labelled `none`; the classifier said `layering`, and two sentences of
+  its narrative cite layering red flags, one from FinCEN and one from FFIEC. The
+  verifier checks that the red flag exists and sits beside real transactions. It
+  cannot check that the red flag applies.
 - **Rapid movement leans on a virtual-asset document.** Its closest match is FATF's
   *Virtual Assets* indicator for "multiple high-value transactions in short
-  succession", cited here for fiat wires, ACH and cheques. The wording fits; the
-  document's scope does not, and one sentence calls Euro cheques a match for
-  "virtual-asset red flags".
-- **Most cites go to one FinCEN chunk.** 11 of 15 cite the same list of common
+  succession", cited in all three rapid-movement narratives for fiat transfers. The
+  wording fits; the document's scope does not.
+- **Most cites go to one FinCEN chunk.** 6 of 11 cite the same list of common
   patterns in FinCEN's SAR narrative guidance (layering across multiple accounts,
   unusual mixed deposits, bursts of activity in a short period). It is a genuine
   red-flag list inside a report-writing guide, not writing advice.
 
 The cache hit rate is the one design decision that measured cleanly: §5 builds every
 prompt `[system][case data]` with no interleaving, and the stable prefix hits. It moves
-run to run with how much evidence each case carries — 58.0% and 74.2% on earlier runs,
-75.8% here — so treat it as a working mechanism rather than a fixed figure.
+run to run with how much evidence each case carries — 58.0%, 74.2% and 75.8% on earlier
+runs, 77.0% here — so treat it as a working mechanism rather than a fixed figure.
 
 Caveats that belong with the table:
 
@@ -96,11 +98,12 @@ Caveats that belong with the table:
   another without any change in their evidence. 4/8 is a single draw, not a
   measurement. Quote it with a range across runs or not at all.
 - **Confidence is not calibrated.** On the previous run it was inverted — every answer
-  above 0.65 was wrong. On this one the top answer (0.85) is right, but a wrong one
-  scores 0.82 and a right one 0.40. Its ordering does not hold from one run to the next.
+  above 0.65 was wrong. On this one it is inverted again: the most confident answer
+  (0.89) is wrong, and every right answer scores between 0.50 and 0.68. Its ordering
+  does not hold from one run to the next.
   Confidence cannot be used for triage, and the UI labels it as such.
 - **One fixture produced no narrative,** by classifying `none` and short-circuiting
-  before drafting. 186/186 covers the seven cases that drafted.
+  before drafting. 155/155 covers the seven cases that drafted.
 - **Latency is the reasoning model, not throttling.** `deepseek-flash` spends thousands
   of tokens on chain-of-thought per call, which is why output tokens exceed an earlier
   Groq run several times over.
