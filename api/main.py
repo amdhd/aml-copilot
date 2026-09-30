@@ -15,7 +15,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from api.auth import Authenticator, load_reviewers
-from config import redis_dsn
+from config import DEPLOYED, redis_dsn
 from db import DSN
 
 SCHEMA = """
@@ -39,7 +39,11 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS decided_by text;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS decided_at timestamptz;
 """
 
-app = FastAPI(title="AML Investigation Copilot")
+# The schema browser is for development. Deployed, it would publish every
+# route and model to whoever reaches the ALB.
+app = FastAPI(title="AML Investigation Copilot",
+              **({"docs_url": None, "redoc_url": None, "openapi_url": None}
+                 if DEPLOYED else {}))
 UI = Path("ui/dist")
 # Cases waiting for the worker. It runs one at a time (api/worker.py), so a
 # queue this deep is already ten minutes of provider calls; past it, a new case

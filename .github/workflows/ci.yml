@@ -98,4 +98,4 @@ jobs:
 
       # Skipped in the smoke job, which has no database.
       - name: API behaviour against Postgres
-        run: uv run pytest tests/test_decision.py tests/test_create_case.py -rs
+        run: uv run pytest tests/test_decision.py tests/test_create_case.py tests/test_worker.py -rs
