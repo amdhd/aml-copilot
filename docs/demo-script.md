@@ -8,10 +8,11 @@ changes, this changes with it.
 
 ## Before the call (T–20 min)
 
-1. **Your IP has to be allowed.** The ALB admits one IP. If you are not at home:
-   `curl https://checkip.amazonaws.com`, put it in `infra/persistent/terraform.tfvars`,
-   then `terraform -chdir=infra/persistent apply`. Takes a minute.
-2. **`make demo-up`** (~6–8 min). Wait for `worker ready (0 restarts)` and the URL.
+1. **Run it from the machine you will present on.** The ALB admits only the IP `demo-up`
+   runs from. If the interviewer should reach it too, add theirs:
+   `EXTRA_CIDRS=<their-ip>/32 make demo-up`.
+2. **`make demo-up`** (~6–8 min). Wait for `worker ready (0 restarts)` and the URL. The
+   browser asks for your reviewer login; the case view will say who approved.
 3. **Pre-run three cases** from the queue, so nobody watches a 30–60s wait:
    - **5077931** (queue #8) — the clean example. Usually `layering`, cites red flags.
    - **5077724** (queue #2) — `rapid_movement`, the pattern is easy to see.
@@ -171,9 +172,10 @@ fractions of a cent per case (~7.5k tokens in, ~3.5k out).
 
 | Symptom | Likely cause | Do |
 |---|---|---|
-| URL doesn't load at all | Your IP changed | Step 1 of *Before the call* |
+| URL doesn't load at all | Your IP changed since `demo-up` | `make demo-up` again: it re-applies for the new IP and reseeds, and keeps cases |
+| Login prompt keeps coming back | Wrong password, or reviewers not set | Re-set `/aml-copilot/reviewers` (README, *Deploy*), then `aws ecs update-service --cluster aml-copilot --service api --force-new-deployment` |
 | Case sits at `queued` | Worker not up yet | Wait for `worker ready`; `aws logs tail /ecs/aml-copilot --follow` |
-| Case `failed`, error mentions 402 | DeepSeek balance ran out | Top up; switch to the pre-run cases meanwhile |
+| Case `failed` | Often a 402: DeepSeek balance ran out | `aws logs tail /ecs/aml-copilot --since 10m` for the error; top up; switch to the pre-run cases meanwhile |
 | Case takes >90s | DeepSeek peak hours | Talk through it, or switch to a pre-run case |
 
 **Afterwards: `make demo-down`.** Left up, it's about $2.60 a day.
