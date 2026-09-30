@@ -17,6 +17,26 @@ REPO=$(terraform -chdir=infra/persistent output -raw ecr_repository_url)
 REGION=$(terraform -chdir=infra/persistent output -raw region)
 export AWS_REGION="$REGION"
 
+# demo-up refuses once this month's spend, actual or forecast, passes this.
+# Read from the aml-copilot budget, which counts usage before credits.
+MAX_SPEND_USD=5
+
+spend_guard() {
+  account=$(aws sts get-caller-identity --query Account --output text)
+  spend=$(aws budgets describe-budget --account-id "$account" --budget-name aml-copilot \
+    --query 'Budget.CalculatedSpend.[ActualSpend.Amount, ForecastedSpend.Amount]' \
+    --output text) || { echo "could not read the aml-copilot budget; not applying"; exit 1; }
+  actual=$(echo "$spend" | awk '{print $1}')
+  forecast=$(echo "$spend" | awk '{print ($2 == "" || $2 == "None") ? 0 : $2}')
+  # AWS updates the figure a few times a day, so it can lag a demo by hours.
+  if awk -v a="$actual" -v f="$forecast" -v m="$MAX_SPEND_USD" \
+       'BEGIN { exit !(a > m || f > m) }'; then
+    echo "this month: \$$actual spent, \$$forecast forecast -- over the \$$MAX_SPEND_USD limit, not applying"
+    exit 1
+  fi
+  echo "this month: \$$actual spent, \$$forecast forecast (limit \$$MAX_SPEND_USD)"
+}
+
 confirm() {
   printf '%s [y/N] ' "$1"
   read -r answer
@@ -42,6 +62,7 @@ push() {
 }
 
 up() {
+  spend_guard
   if ! aws ecr describe-images --repository-name aml-copilot \
        --image-ids imageTag="$TAG" >/dev/null 2>&1; then
     echo "no image $TAG in ECR -- run make push first"

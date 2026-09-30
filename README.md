@@ -283,8 +283,10 @@ make demo-up     # apply for this machine's IP, seed RDS, wait for API and worke
 make demo-down   # destroy, then check no RDS, ALB, ECS cluster or elastic IP remains
 ```
 
-`demo-up` and `demo-down` each ask before touching billed resources. The ALB admits only
-the public IP `demo-up` runs from; add others with `EXTRA_CIDRS=198.51.100.4/32 make demo-up`.
+`demo-up` and `demo-down` each ask before touching billed resources, and `demo-up`
+refuses outright once this month's spend, actual or forecast and before credits, is over
+$5. The ALB admits only the public IP `demo-up` runs from; add others with
+`EXTRA_CIDRS=198.51.100.4/32 make demo-up`.
 
 Choices worth defending:
 

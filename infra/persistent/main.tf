@@ -365,6 +365,12 @@ resource "aws_budgets_budget" "monthly" {
   limit_unit   = "USD"
   time_unit    = "MONTHLY"
 
+  # Usage before credits. Net of them, the spend reads $0.00 until the credits
+  # run out, and neither these alarms nor demo-up's spend guard would fire.
+  cost_types {
+    include_credit = false
+  }
+
   dynamic "notification" {
     for_each = [
       { threshold = 50, type = "ACTUAL" },
