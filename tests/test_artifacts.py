@@ -6,6 +6,8 @@ place where it is unrecoverable (deployed, where there is no CSV to rebuild
 from) and silent in the place where it is not (locally, where load() rebuilds).
 """
 
+import hashlib
+
 import pytest
 
 import artifacts
@@ -38,22 +40,51 @@ def test_non_s3_uri_raises(tmp_path, monkeypatch):
         artifacts.ensure(tmp_path / "graph.pt", "AML_GRAPH_S3")
 
 
-def test_uri_splits_into_bucket_and_key(tmp_path, monkeypatch):
-    """A key with slashes in it must stay whole."""
+GRAPH = b"graph"
+DIGEST = hashlib.sha256(GRAPH).hexdigest()[:16]
+
+
+def fake_s3(monkeypatch, body=GRAPH):
+    """boto3 with an S3 whose every object is `body`. Returns what it was asked."""
     seen = {}
 
     class FakeS3:
         def download_file(self, bucket, key, dest):
             seen.update(bucket=bucket, key=key)
-            open(dest, "wb").write(b"graph")
+            open(dest, "wb").write(body)
 
-    monkeypatch.setenv("AML_GRAPH_S3", "s3://aml-artifacts/graphs/HI-Small.pt")
     monkeypatch.setitem(__import__("sys").modules, "boto3",
                         type("m", (), {"client": staticmethod(lambda _: FakeS3())}))
+    return seen
+
+
+def test_uri_splits_into_bucket_and_key(tmp_path, monkeypatch):
+    """A key with slashes in it must stay whole."""
+    seen = fake_s3(monkeypatch)
+    monkeypatch.setenv("AML_GRAPH_S3", f"s3://aml-artifacts/graph/{DIGEST}/HI-Small.pt")
     path = tmp_path / "graph.pt"
     artifacts.ensure(path, "AML_GRAPH_S3")
 
-    assert seen == {"bucket": "aml-artifacts", "key": "graphs/HI-Small.pt"}
+    assert seen == {"bucket": "aml-artifacts", "key": f"graph/{DIGEST}/HI-Small.pt"}
     assert path.read_bytes() == b"graph"
     # The partial file is renamed, never left behind looking complete.
     assert not path.with_name(path.name + ".part").exists()
+
+
+def test_a_file_that_does_not_match_its_key_is_refused_and_removed(tmp_path, monkeypatch):
+    """It would be unpickled by torch.load: code, not data, if someone swapped it."""
+    fake_s3(monkeypatch, body=b"not the graph")
+    monkeypatch.setenv("AML_GRAPH_S3", f"s3://aml-artifacts/graph/{DIGEST}/HI-Small.pt")
+    path = tmp_path / "graph.pt"
+    with pytest.raises(RuntimeError, match="Refusing to load it"):
+        artifacts.ensure(path, "AML_GRAPH_S3")
+    assert not path.exists()
+    assert not path.with_name(path.name + ".part").exists()
+
+
+def test_a_key_without_a_digest_is_refused_before_downloading(tmp_path, monkeypatch):
+    seen = fake_s3(monkeypatch)
+    monkeypatch.setenv("AML_GRAPH_S3", "s3://aml-artifacts/graphs/HI-Small.pt")
+    with pytest.raises(RuntimeError, match="no sha256 prefix"):
+        artifacts.ensure(tmp_path / "graph.pt", "AML_GRAPH_S3")
+    assert seen == {}
