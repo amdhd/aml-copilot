@@ -59,6 +59,9 @@ resource "aws_db_instance" "main" {
 
   allocated_storage = 20
   storage_type      = "gp3"
+  # With the AWS-managed key: free, and the default of false is what every
+  # scanner flags. Rebuilt each apply, so turning it on costs nothing either.
+  storage_encrypted = true
 
   db_name  = "aml"
   username = "aml"
@@ -122,10 +125,10 @@ resource "aws_lb_target_group" "api" {
   target_type = "ip"
   vpc_id      = local.p.vpc_id
 
-  # / is the built UI: static, no database, so a slow RDS cannot fail the check
-  # and cycle a healthy task.
+  # /healthz needs no login and no database, so a slow RDS cannot fail the
+  # check and cycle a healthy task. / is behind the reviewer login.
   health_check {
-    path                = "/"
+    path                = "/healthz"
     healthy_threshold   = 2
     unhealthy_threshold = 3
     interval            = 15
@@ -133,13 +136,57 @@ resource "aws_lb_target_group" "api" {
   deregistration_delay = 5
 }
 
+# The persistent layer's ALB group holds no ingress of its own. These rules are
+# the demo's: written for the addresses it runs from, gone with the destroy.
+resource "aws_vpc_security_group_ingress_rule" "alb" {
+  for_each = {
+    for pair in setproduct(var.allowed_cidrs, [80, 443]) :
+    "${pair[0]}:${pair[1]}" => { cidr = pair[0], port = pair[1] }
+  }
+  security_group_id = local.p.alb_sg_id
+  cidr_ipv4         = each.value.cidr
+  from_port         = each.value.port
+  to_port           = each.value.port
+  ip_protocol       = "tcp"
+  description       = each.value.port == 80 ? "Redirected to 443" : "HTTPS"
+}
+
+# Port 80 only redirects. Nothing, a login least of all, is served over it.
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
   default_action {
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = local.p.certificate_arn
+  default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.api.arn
+  }
+}
+
+# The hostname exists only while a demo does; destroy removes it.
+resource "aws_route53_record" "demo" {
+  zone_id = local.p.zone_id
+  name    = local.p.hostname
+  type    = "A"
+  alias {
+    name                   = aws_lb.main.dns_name
+    zone_id                = aws_lb.main.zone_id
+    evaluate_target_health = false
   }
 }
 
@@ -191,12 +238,15 @@ resource "aws_ecs_task_definition" "api" {
 
   container_definitions = jsonencode([
     {
-      name             = "api"
-      image            = local.image
-      essential        = true
-      portMappings     = [{ containerPort = 8000 }]
-      environment      = [{ name = "AML_REDIS", value = "redis://localhost:6379" }]
-      secrets          = [local.dsn_secret]
+      name         = "api"
+      image        = local.image
+      essential    = true
+      portMappings = [{ containerPort = 8000 }]
+      environment  = [{ name = "AML_REDIS", value = "redis://localhost:6379" }]
+      secrets = [
+        local.dsn_secret,
+        { name = "AML_REVIEWERS", valueFrom = local.p.reviewers_arn },
+      ]
       dependsOn        = [{ containerName = "redis", condition = "START" }]
       logConfiguration = local.logs["api"]
     },
@@ -292,7 +342,7 @@ resource "aws_ecs_service" "api" {
   service_registries {
     registry_arn = aws_service_discovery_service.api.arn
   }
-  depends_on = [aws_lb_listener.http]
+  depends_on = [aws_lb_listener.https]
 }
 
 resource "aws_ecs_service" "worker" {

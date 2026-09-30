@@ -85,21 +85,23 @@ resource "aws_route_table_association" "public" {
 # --- Security groups -------------------------------------------------------
 #
 # The chain is ALB -> tasks -> RDS, each hop allowing only the one before.
-# The ALB is the only thing reachable from outside, and only from
-# var.allowed_cidrs: the UI has no auth, and every case opened spends DeepSeek
-# credit.
+# The ALB is the only thing reachable from outside, and only from the addresses
+# a demo is run for: every case opened spends DeepSeek credit.
+#
+# Its ingress rules are ephemeral (aws_vpc_security_group_ingress_rule in
+# infra/ephemeral), written by each demo-up for the IP it runs from. A fixed
+# home IP here outlived the demos it was for, and kept access wherever the ISP
+# reassigned it. No ingress block here, and there must never be one: inline
+# rules make this resource authoritative for ingress, and the next apply would
+# delete the ephemeral layer's rules. Omitted, the provider leaves ingress
+# alone -- which is also why the old inline /32 rule, once removed from here,
+# still had to be revoked by hand.
 
 resource "aws_security_group" "alb" {
   name        = "${local.name}-alb"
   description = "Demo ALB, reachable from allowed_cidrs only"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_cidrs
-  }
   egress {
     from_port   = 0
     to_port     = 0
@@ -154,9 +156,11 @@ resource "aws_security_group" "db" {
 
 # --- Image and artifacts ---------------------------------------------------
 
+# Tags are git commits (scripts/demo.sh), so a tag is a promise about what is
+# inside. Mutable, anyone with push rights could put different code behind one.
 resource "aws_ecr_repository" "app" {
   name                 = local.name
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
   image_scanning_configuration {
     scan_on_push = true
   }
@@ -208,6 +212,47 @@ resource "aws_cloudwatch_log_group" "app" {
   retention_in_days = 7
 }
 
+# --- TLS -------------------------------------------------------------------
+#
+# Reviewers log in with basic auth (api/auth.py), which sends the password on
+# every request, so the ALB serves HTTPS. The certificate is free and validates
+# in minutes, but not instantly, so it lives here rather than in ephemeral: an
+# apply before a demo should not wait on DNS. The alias record pointing the
+# hostname at the ALB is ephemeral, and exists only while a demo does.
+#
+# The zone is looked up, not created. It is shared with other projects, and
+# this layer adds exactly one record to it: the validation CNAME, which ACM
+# also needs to renew.
+
+data "aws_route53_zone" "demo" {
+  name         = var.domain_zone
+  private_zone = false
+}
+
+resource "aws_acm_certificate" "demo" {
+  domain_name       = var.hostname
+  validation_method = "DNS"
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "cert_validation" {
+  for_each = {
+    for o in aws_acm_certificate.demo.domain_validation_options : o.domain_name => o
+  }
+  zone_id = data.aws_route53_zone.demo.zone_id
+  name    = each.value.resource_record_name
+  type    = each.value.resource_record_type
+  records = [each.value.resource_record_value]
+  ttl     = 300
+}
+
+resource "aws_acm_certificate_validation" "demo" {
+  certificate_arn         = aws_acm_certificate.demo.arn
+  validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
+}
+
 # --- LLM key ---------------------------------------------------------------
 #
 # SSM SecureString rather than Secrets Manager: free at this tier against
@@ -219,6 +264,22 @@ resource "aws_cloudwatch_log_group" "app" {
 
 resource "aws_ssm_parameter" "llm_api_key" {
   name  = "/${local.name}/llm-api-key"
+  type  = "SecureString"
+  value = "set-me-from-the-cli"
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+# Reviewer logins (api/auth.py): username -> PBKDF2 hash, as JSON. Same
+# arrangement as the key above; the placeholder is not JSON, so an api task
+# started before it is set fails on the way up rather than admitting anyone.
+#
+#   aws ssm put-parameter --name /aml-copilot/reviewers --type SecureString \
+#     --overwrite --value "$(uv run python -m api.auth alice bob)"
+
+resource "aws_ssm_parameter" "reviewers" {
+  name  = "/${local.name}/reviewers"
   type  = "SecureString"
   value = "set-me-from-the-cli"
   lifecycle {

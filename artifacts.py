@@ -9,10 +9,31 @@ pulls it once, on the way up.
 Locally this does nothing: the file is already on disk, built by `make train`.
 """
 
+import hashlib
 import os
+import re
 from pathlib import Path
 
 from config import DEPLOYED
+
+
+def _expected_digest(key: str) -> str:
+    """The key names the file's sha256 by its first 16 hex, as a directory --
+    graph/<digest>/<file>, infra/ephemeral's graph_key."""
+    for part in key.split("/")[:-1]:
+        if re.fullmatch(r"[0-9a-f]{16}", part):
+            return part
+    raise RuntimeError(
+        f"{key!r} carries no sha256 prefix directory (graph/<16 hex>/<file>), "
+        f"so the download cannot be checked before torch.load unpickles it.")
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        while chunk := f.read(1 << 20):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def ensure(path, env_var: str) -> Path:
@@ -35,6 +56,7 @@ def ensure(path, env_var: str) -> Path:
     import boto3                       # only the deployed path pays for this
 
     bucket, _, key = uri[len("s3://"):].partition("/")
+    expected = _expected_digest(key)
     local.parent.mkdir(parents=True, exist_ok=True)
     # Download beside the target and rename. A task killed mid-download -- spot
     # reclaims the worker, section 8 -- would otherwise leave a truncated file
@@ -43,6 +65,15 @@ def ensure(path, env_var: str) -> Path:
     partial = local.with_name(local.name + ".part")
     print(f"fetching {uri}")
     boto3.client("s3").download_file(bucket, key, str(partial))
+    # torch.load(weights_only=False) is pickle: whatever is in this file runs.
+    # The task role can only read the bucket, but anyone who can write to it
+    # could otherwise put code in the worker. Checked before the rename, so a
+    # file that fails is never left where load() would find it.
+    actual = _sha256(partial)
+    if not actual.startswith(expected):
+        partial.unlink()
+        raise RuntimeError(f"{uri} has sha256 {actual[:16]}..., but its key says "
+                           f"{expected}. Refusing to load it.")
     partial.replace(local)
     print(f"fetched {local} ({local.stat().st_size / 1e9:.2f}GB)")
     return local

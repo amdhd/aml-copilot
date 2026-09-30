@@ -4,6 +4,7 @@ indefinitely at the human gate, which no blocking HTTP request can represent."""
 import asyncio
 import json
 import os
+import traceback
 
 import psycopg
 from arq.connections import RedisSettings
@@ -50,8 +51,12 @@ async def run_case(ctx, case_id: str, alert_id: int, decision: str | None = None
                json.dumps(state.get("narrative")),
                json.dumps(state["evidence"], default=str), None, case_id)
     except Exception as error:                      # surface it, never hang
+        # The whole error goes to the log; the case keeps only its type. The
+        # message is returned by GET /cases/{id}, and a psycopg or provider
+        # error names hosts and endpoints nobody outside needs to see.
+        traceback.print_exc()
         row = ("failed", None, None, None, None, None, None,
-               f"{type(error).__name__}: {error}", case_id)
+               type(error).__name__, case_id)
 
     async with await psycopg.AsyncConnection.connect(DSN, autocommit=True) as conn:
         await conn.execute(

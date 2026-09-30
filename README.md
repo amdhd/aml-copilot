@@ -245,8 +245,8 @@ separate state:
 
 | Layer | Contains | Lifecycle | Approx. cost |
 |---|---|---|---|
-| `infra/persistent` | VPC, subnets, security groups, ECR, S3 (graph cache), log group, SSM key, IAM, $20 budget alarm | applied once | ~$0.20/mo |
-| `infra/ephemeral` | RDS Postgres 16 (`db.t4g.micro`), ALB, api task + Redis sidecar, worker on Fargate Spot, seed task | per demo | ~$0.11/hr |
+| `infra/persistent` | VPC, subnets, security groups, ECR, S3 (graph cache), log group, SSM key and reviewer logins, ACM certificate, IAM, $20 budget alarm | applied once | ~$0.20/mo |
+| `infra/ephemeral` | RDS Postgres 16 (`db.t4g.micro`), HTTPS ALB and its ingress rules, DNS alias, api task + Redis sidecar, worker on Fargate Spot, seed task | per demo | ~$0.11/hr |
 
 Estimates at on-demand `ap-southeast-1` prices when this was built; the budget alarm is
 the real guard.
@@ -254,11 +254,16 @@ the real guard.
 **Once:**
 
 ```bash
-cp infra/persistent/terraform.tfvars.example infra/persistent/terraform.tfvars   # email, your IP
+cp infra/persistent/terraform.tfvars.example infra/persistent/terraform.tfvars   # email, zone, hostname
 cd infra/persistent && terraform init && terraform apply
 aws ssm put-parameter --name /aml-copilot/llm-api-key --type SecureString \
   --overwrite --value "$(grep '^AML_LLM_API_KEY=' ../../.env | cut -d= -f2-)"
+cd ../.. && aws ssm put-parameter --name /aml-copilot/reviewers --type SecureString \
+  --overwrite --value "$(uv run python -m api.auth alice)"    # prompts for each password
 ```
+
+`domain_zone` is an existing public Route 53 zone. Terraform only reads it and adds two
+records: the certificate's validation CNAME, and an alias to the ALB while a demo is up.
 
 Then upload the graph cache the worker fetches on start-up:
 
@@ -266,16 +271,20 @@ Then upload the graph cache the worker fetches on start-up:
 aws s3 cp data/HI-Small_Trans.None.graph.pt s3://<artifacts_bucket>/graph/<sha256[:16]>/HI-Small_Trans.None.graph.pt
 ```
 
+The directory is the file's checksum, not decoration: the worker refuses a download whose
+sha256 does not start with it, since `torch.load` unpickles whatever it is given.
+
 **Per demo** (~6 minutes, most of it RDS). The image is tagged with the current git
 commit, so push once per commit you want to run:
 
 ```bash
 make push        # build and push this commit's image (refuses with uncommitted changes)
-make demo-up     # apply, seed RDS, wait for the API and worker, print the URL
+make demo-up     # apply for this machine's IP, seed RDS, wait for API and worker, print the URL
 make demo-down   # destroy, then check no RDS, ALB, ECS cluster or elastic IP remains
 ```
 
-`demo-up` and `demo-down` each ask before touching billed resources.
+`demo-up` and `demo-down` each ask before touching billed resources. The ALB admits only
+the public IP `demo-up` runs from; add others with `EXTRA_CIDRS=198.51.100.4/32 make demo-up`.
 
 Choices worth defending:
 
@@ -289,10 +298,12 @@ Choices worth defending:
 - **Redis is a sidecar in the on-demand api task**, not ElastiCache: cheaper, and a
   Spot reclaim of the worker cannot take the queue with it. Run state lives in the
   Postgres checkpointer either way.
-- **The ALB is open to `allowed_cidrs` only.** There is no auth, and every case spends
-  LLM credit.
-- **Secrets stay out of Terraform state and task definitions.** The LLM key is set from
-  the CLI; the DSN reaches containers through SSM.
+- **Reviewers log in, over HTTPS, from the demo's IPs only.** Per-reviewer basic auth
+  (`api/auth.py`), so an approval records who gave it. Basic auth rather than Cognito:
+  one login check and a hash file, not a user pool, for a demo with a handful of
+  reviewers. The allowlist is written per demo, because every case spends LLM credit.
+- **Secrets stay out of Terraform state and task definitions.** The LLM key and reviewer
+  hashes are set from the CLI; the DSN reaches containers through SSM.
 
 Verified end to end on 2026-09-23: a case through the public ALB parked at the human
 gate after 31s and resumed to `approved` from the RDS checkpoint.

@@ -16,8 +16,8 @@ from diagrams.aws.compute import ECR, Fargate
 from diagrams.aws.cost import Budgets
 from diagrams.aws.database import RDSPostgresqlInstance
 from diagrams.aws.management import Cloudwatch, SystemsManagerParameterStore
-from diagrams.aws.network import ALB, InternetGateway
-from diagrams.aws.security import IAMRole
+from diagrams.aws.network import ALB, InternetGateway, Route53
+from diagrams.aws.security import CertificateManager, IAMRole
 from diagrams.aws.storage import SimpleStorageServiceS3Bucket
 from diagrams.onprem.client import Client, User
 from diagrams.onprem.inmemory import Redis
@@ -40,14 +40,16 @@ with Diagram("AML Investigation Copilot -- AWS (ECS Fargate)\n"
              filename=str(OUT), show=False, direction="LR",
              graph_attr=graph_attr):
 
-    analyst = User("Analyst\n(browser, one allowed IP)")
+    analyst = User("Reviewer\n(browser, login;\ndemo-up's IP only)")
     laptop = Client("Laptop\ndocker push / terraform")
     deepseek = Internet("DeepSeek API\ndeepseek-flash")
 
     with Cluster("AWS  --  account 149751500899"):
-        ecr = ECR("ECR\naml-copilot\nkeep 3, scan on push")
+        ecr = ECR("ECR\naml-copilot\nimmutable tags, keep 3,\nscan on push")
         s3 = SimpleStorageServiceS3Bucket("S3 artifacts\n1.84GB graph cache")
-        ssm = SystemsManagerParameterStore("SSM SecureString\nLLM API key")
+        ssm = SystemsManagerParameterStore("SSM SecureString\nLLM API key,\nreviewer hashes")
+        acm = CertificateManager("ACM certificate\nDNS-validated")
+        dns = Route53("Route 53 (shared zone)\nvalidation CNAME;\nalias while up")
         logs = Cloudwatch("CloudWatch Logs\n7-day retention")
         budget = Budgets("Budget $20/mo\nemail at 50% / 100%")
         roles = IAMRole("IAM roles\nexecution + task")
@@ -57,7 +59,7 @@ with Diagram("AML Investigation Copilot -- AWS (ECS Fargate)\n"
 
             with Cluster("Public subnets 10.40.0.0/24, 10.40.1.0/24", graph_attr=PUBLIC):
                 with Cluster("ephemeral", graph_attr=EPHEMERAL):
-                    alb = ALB("ALB :80\nSG: allowed IP only")
+                    alb = ALB("ALB :443 (:80 redirects)\nSG rules: this demo's IPs")
                     with Cluster("ECS task: api (on-demand)", graph_attr=EPHEMERAL):
                         api = Fargate("api\nFastAPI + UI")
                         redis = Redis("redis\njob queue sidecar")
@@ -68,7 +70,7 @@ with Diagram("AML Investigation Copilot -- AWS (ECS Fargate)\n"
                 with Cluster("ephemeral", graph_attr=EPHEMERAL):
                     rds = RDSPostgresqlInstance("RDS Postgres 16\n+ pgvector\nseed: 1,080 txns,\n51 alerts, 48 chunks")
 
-    analyst >> Edge(label="HTTP") >> igw >> alb >> Edge(label=":8000") >> api
+    analyst >> Edge(label="HTTPS") >> igw >> alb >> Edge(label=":8000") >> api
     api >> Edge(label="enqueue") >> redis
     worker >> Edge(label="dequeue", style="dashed") >> redis
     api >> Edge(label=":5432") >> rds
@@ -79,5 +81,8 @@ with Diagram("AML Investigation Copilot -- AWS (ECS Fargate)\n"
     laptop >> Edge(label="upload graph", style="dashed") >> s3
     ecr >> Edge(label="image pull", style="dotted") >> [api, worker]
     ssm >> Edge(label="key into env", style="dotted") >> worker
+    ssm >> Edge(label="reviewers into env", style="dotted") >> api
+    acm >> Edge(label="TLS", style="dotted") >> alb
+    dns >> Edge(label="hostname", style="dotted") >> alb
     roles >> Edge(label="assumed by", style="dotted") >> [api, worker]
     [api, worker] >> Edge(style="dotted") >> logs
