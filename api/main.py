@@ -7,11 +7,11 @@ from pathlib import Path
 import psycopg
 from arq import create_pool
 from arq.connections import RedisSettings
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.staticfiles import StaticFiles
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from config import redis_dsn
 from db import DSN
@@ -37,6 +37,11 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS evidence jsonb;
 
 app = FastAPI(title="AML Investigation Copilot")
 UI = Path("ui/dist")
+# Cases waiting for the worker. It runs one at a time (api/worker.py), so a
+# queue this deep is already ten minutes of provider calls; past it, a new case
+# is refused rather than queued behind a flood nobody will read.
+MAX_QUEUED = 20
+OPEN = ("queued", "resuming", "awaiting_review")
 
 
 @app.middleware("http")
@@ -52,7 +57,8 @@ async def strip_api_prefix(request, call_next):
 
 
 class CaseRequest(BaseModel):
-    alert_id: int
+    # alerts.txn_id is a bigint; a larger int reached Postgres and came back 500.
+    alert_id: int = Field(ge=0, lt=2**63)
 
 
 class Decision(BaseModel):
@@ -111,14 +117,47 @@ async def cases(limit: int = Query(50, ge=1, le=500)):
 
 
 @app.post("/cases", status_code=202)
-async def create_case(body: CaseRequest):
+async def create_case(body: CaseRequest, response: Response):
+    """Every case spends provider credit, so only an alert the queue actually
+    offers can open one, an alert gets one open case at a time, and the queue
+    has a ceiling."""
     async with await psycopg.AsyncConnection.connect(DSN, autocommit=True) as conn:
-        row = await (await conn.execute(
-            "INSERT INTO cases (case_id, alert_id, status) "
-            "VALUES (gen_random_uuid(), %s, 'queued') RETURNING case_id",
+        # The same test-split filter as /alerts. A train-split score is
+        # in-sample, and an id with no alert at all used to take a queue slot
+        # and fail in the worker.
+        alert = await (await conn.execute(
+            "SELECT 1 FROM alerts WHERE txn_id = %s AND split = 'test'",
             (body.alert_id,))).fetchone()
-    case_id = str(row[0])
-    await app.state.redis.enqueue_job("run_case", case_id, body.alert_id)
+        if alert is None:
+            raise HTTPException(404, "no such alert")
+        async with conn.transaction():
+            # Serialise per alert, so two clicks cannot both find no open case.
+            await conn.execute("SELECT pg_advisory_xact_lock(%s)", (body.alert_id,))
+            existing = await (await conn.execute(
+                "SELECT case_id, status FROM cases WHERE alert_id = %s"
+                " AND status = ANY(%s) ORDER BY created_at DESC LIMIT 1",
+                (body.alert_id, list(OPEN)))).fetchone()
+            if existing is not None:
+                response.status_code = 200
+                return {"case_id": str(existing[0]), "status": existing[1]}
+            queued = (await (await conn.execute(
+                "SELECT count(*) FROM cases WHERE status = 'queued'")).fetchone())[0]
+            if queued >= MAX_QUEUED:
+                raise HTTPException(429, f"{queued} cases already queued; try later")
+            row = await (await conn.execute(
+                "INSERT INTO cases (case_id, alert_id, status) "
+                "VALUES (gen_random_uuid(), %s, 'queued') RETURNING case_id",
+                (body.alert_id,))).fetchone()
+        case_id = str(row[0])
+        try:
+            await app.state.redis.enqueue_job("run_case", case_id, body.alert_id)
+        except Exception:
+            # A `queued` row with no job would be returned as the open case for
+            # this alert forever.
+            await conn.execute(
+                "UPDATE cases SET status = 'failed', error = 'EnqueueError'"
+                " WHERE case_id = %s", (case_id,))
+            raise
     return {"case_id": case_id, "status": "queued"}
 
 

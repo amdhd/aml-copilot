@@ -97,5 +97,5 @@ jobs:
           EOF
 
       # Skipped in the smoke job, which has no database.
-      - name: Human gate answers once
-        run: uv run pytest tests/test_decision.py -rs
+      - name: API behaviour against Postgres
+        run: uv run pytest tests/test_decision.py tests/test_create_case.py -rs
