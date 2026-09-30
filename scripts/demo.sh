@@ -60,7 +60,8 @@ up() {
 
   echo "waiting for the API..."
   i=0
-  until curl -sf -o /dev/null "$url/api/alerts?limit=1"; do
+  # /healthz: everything else is behind the reviewer login (api/auth.py).
+  until curl -sf -o /dev/null "$url/healthz"; do
     i=$((i + 1)); [ $i -lt 60 ] || { echo "API not up after 5 min"; exit 1; }
     sleep 5
   done

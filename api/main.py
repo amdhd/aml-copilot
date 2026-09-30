@@ -1,18 +1,20 @@
 """FastAPI. Returns a case_id immediately and the UI polls; a run takes 10-20s
 and later waits at a human gate, so the request cannot block on it."""
 
+import asyncio
 import uuid
 from pathlib import Path
 
 import psycopg
 from arq import create_pool
 from arq.connections import RedisSettings
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.staticfiles import StaticFiles
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from api.auth import Authenticator, load_reviewers
 from config import redis_dsn
 from db import DSN
 
@@ -33,6 +35,8 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS verified boolean;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS escalated boolean;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS verification jsonb;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS evidence jsonb;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS decided_by text;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS decided_at timestamptz;
 """
 
 app = FastAPI(title="AML Investigation Copilot")
@@ -42,6 +46,9 @@ UI = Path("ui/dist")
 # is refused rather than queued behind a flood nobody will read.
 MAX_QUEUED = 20
 OPEN = ("queued", "resuming", "awaiting_review")
+# None locally without AML_REVIEWERS: no login, as before. Deployed, required.
+REVIEWERS = load_reviewers()
+authenticate = Authenticator(REVIEWERS) if REVIEWERS else None
 
 
 @app.middleware("http")
@@ -53,6 +60,23 @@ async def strip_api_prefix(request, call_next):
     path = request.scope["path"]
     if path == "/api" or path.startswith("/api/"):
         request.scope["path"] = path[len("/api"):] or "/"
+    return await call_next(request)
+
+
+# Registered after strip_api_prefix, so it runs before it and sees the raw path.
+@app.middleware("http")
+async def require_reviewer(request, call_next):
+    """Every route, the UI included, needs a reviewer's login -- except the
+    ALB's health check, which has none to give."""
+    request.state.reviewer = None
+    if authenticate is None or request.scope["path"] == "/healthz":
+        return await call_next(request)
+    reviewer = await asyncio.to_thread(authenticate,
+                                       request.headers.get("authorization"))
+    if reviewer is None:
+        return Response(status_code=401, headers={
+            "WWW-Authenticate": 'Basic realm="AML Copilot", charset="UTF-8"'})
+    request.state.reviewer = reviewer
     return await call_next(request)
 
 
@@ -80,6 +104,13 @@ async def startup():
     app.state.redis = await create_pool(RedisSettings.from_dsn(redis_dsn()))
     async with await psycopg.AsyncConnection.connect(DSN, autocommit=True) as conn:
         await conn.execute(SCHEMA)
+
+
+@app.get("/healthz")
+async def healthz():
+    """For the ALB. No login and no database, so a slow RDS cannot fail the
+    check and cycle a healthy task."""
+    return {"ok": True}
 
 
 @app.get("/alerts")
@@ -168,13 +199,13 @@ async def get_case(case_id: str):
         row = await (await conn.execute(
             "SELECT case_id, alert_id, status, typology, confidence, reasoning,"
             " evidence_count, error, narrative, verified, escalated, verification,"
-            " evidence"
+            " evidence, decided_by, decided_at"
             " FROM cases WHERE case_id = %s", (case_id,))).fetchone()
     if row is None:
         raise HTTPException(404, "no such case")
     keys = ("case_id", "alert_id", "status", "typology", "confidence",
             "reasoning", "evidence_count", "error", "narrative", "verified",
-            "escalated", "verification", "evidence")
+            "escalated", "verification", "evidence", "decided_by", "decided_at")
     return dict(zip(keys, (str(row[0]), *row[1:])))
 
 
@@ -222,7 +253,7 @@ async def subgraph(case_id: str):
 
 
 @app.post("/cases/{case_id}/decision", status_code=202)
-async def decide(case_id: str, body: Decision):
+async def decide(case_id: str, body: Decision, request: Request):
     """Resume a run parked at the human gate. The graph has been waiting in
     Postgres since the interrupt, however long that took."""
     _valid_case_id(case_id)
@@ -233,8 +264,9 @@ async def decide(case_id: str, body: Decision):
         # both callers theirs was recorded. A concurrent UPDATE waits on the row
         # lock and then finds the status already moved, so exactly one wins.
         row = await (await conn.execute(
-            "UPDATE cases SET status = 'resuming' WHERE case_id = %s"
-            " AND status = 'awaiting_review' RETURNING alert_id", (case_id,))).fetchone()
+            "UPDATE cases SET status = 'resuming', decided_by = %s, decided_at = now()"
+            " WHERE case_id = %s AND status = 'awaiting_review' RETURNING alert_id",
+            (request.state.reviewer, case_id))).fetchone()
         if row is None:
             current = await (await conn.execute(
                 "SELECT status FROM cases WHERE case_id = %s", (case_id,))).fetchone()
@@ -246,8 +278,8 @@ async def decide(case_id: str, body: Decision):
         except Exception:
             # Unclaimed, or the case would sit in `resuming` with no job behind it.
             await conn.execute(
-                "UPDATE cases SET status = 'awaiting_review' WHERE case_id = %s",
-                (case_id,))
+                "UPDATE cases SET status = 'awaiting_review', decided_by = NULL,"
+                " decided_at = NULL WHERE case_id = %s", (case_id,))
             raise
     return {"case_id": case_id, "status": "resuming", "decision": body.decision}
 

@@ -7,6 +7,7 @@ test the fake. Each test makes its own case row and deletes it after.
 
 import asyncio
 import uuid
+from types import SimpleNamespace
 
 import psycopg
 import pytest
@@ -38,9 +39,15 @@ def status(case_id):
                             (case_id,)).fetchone()[0]
 
 
-async def attempt(case_id, decision):
+def signed_in(reviewer):
+    """What require_reviewer leaves on the request."""
+    return SimpleNamespace(state=SimpleNamespace(reviewer=reviewer))
+
+
+async def attempt(case_id, decision, reviewer="alice"):
     try:
-        return await main.decide(case_id, main.Decision(decision=decision))
+        return await main.decide(case_id, main.Decision(decision=decision),
+                                 signed_in(reviewer))
     except HTTPException as error:
         return error.status_code
 
@@ -51,8 +58,8 @@ def test_concurrent_decisions_resume_the_run_once(case):
     main.app.state.redis = queue = Queue()
 
     async def both():
-        return await asyncio.gather(attempt(case, "approved"),
-                                    attempt(case, "rejected"))
+        return await asyncio.gather(attempt(case, "approved", "alice"),
+                                    attempt(case, "rejected", "bob"))
 
     results = asyncio.run(both())
     accepted = [r for r in results if isinstance(r, dict)]
@@ -73,8 +80,21 @@ def test_a_failed_enqueue_leaves_the_case_open(case):
     """Claimed but never queued would strand the case in `resuming` forever."""
     main.app.state.redis = Queue(fail=True)
     with pytest.raises(ConnectionError):
-        asyncio.run(main.decide(case, main.Decision(decision="approved")))
+        asyncio.run(main.decide(case, main.Decision(decision="approved"),
+                                signed_in("alice")))
     assert status(case) == "awaiting_review"
+    with psycopg.connect(DSN) as conn:
+        assert conn.execute("SELECT decided_by, decided_at FROM cases"
+                            " WHERE case_id = %s", (case,)).fetchone() == (None, None)
+
+
+def test_the_decision_records_who_made_it_and_when(case):
+    main.app.state.redis = Queue()
+    asyncio.run(attempt(case, "approved", "alice"))
+    with psycopg.connect(DSN) as conn:
+        by, at = conn.execute("SELECT decided_by, decided_at FROM cases"
+                              " WHERE case_id = %s", (case,)).fetchone()
+    assert by == "alice" and at is not None
 
 
 def test_an_unknown_case_is_404():

@@ -122,10 +122,10 @@ resource "aws_lb_target_group" "api" {
   target_type = "ip"
   vpc_id      = local.p.vpc_id
 
-  # / is the built UI: static, no database, so a slow RDS cannot fail the check
-  # and cycle a healthy task.
+  # /healthz needs no login and no database, so a slow RDS cannot fail the
+  # check and cycle a healthy task. / is behind the reviewer login.
   health_check {
-    path                = "/"
+    path                = "/healthz"
     healthy_threshold   = 2
     unhealthy_threshold = 3
     interval            = 15
@@ -191,12 +191,15 @@ resource "aws_ecs_task_definition" "api" {
 
   container_definitions = jsonencode([
     {
-      name             = "api"
-      image            = local.image
-      essential        = true
-      portMappings     = [{ containerPort = 8000 }]
-      environment      = [{ name = "AML_REDIS", value = "redis://localhost:6379" }]
-      secrets          = [local.dsn_secret]
+      name         = "api"
+      image        = local.image
+      essential    = true
+      portMappings = [{ containerPort = 8000 }]
+      environment  = [{ name = "AML_REDIS", value = "redis://localhost:6379" }]
+      secrets = [
+        local.dsn_secret,
+        { name = "AML_REVIEWERS", valueFrom = local.p.reviewers_arn },
+      ]
       dependsOn        = [{ containerName = "redis", condition = "START" }]
       logConfiguration = local.logs["api"]
     },

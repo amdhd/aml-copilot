@@ -115,7 +115,10 @@ export default function CaseView({ kase, onBack, onRefresh }) {
             <button disabled={busy} onClick={() => submit('rejected')}>Reject</button>
           </>
         ) : (
-          <p className="muted">This case is {kase.status}; the gate has already been answered.</p>
+          <p className="muted">
+            This case is {kase.status}
+            {kase.decided_by && ` by ${kase.decided_by}`}; the gate has already been answered.
+          </p>
         )}
       </section>
     </>

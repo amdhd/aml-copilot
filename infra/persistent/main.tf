@@ -226,6 +226,22 @@ resource "aws_ssm_parameter" "llm_api_key" {
   }
 }
 
+# Reviewer logins (api/auth.py): username -> PBKDF2 hash, as JSON. Same
+# arrangement as the key above; the placeholder is not JSON, so an api task
+# started before it is set fails on the way up rather than admitting anyone.
+#
+#   aws ssm put-parameter --name /aml-copilot/reviewers --type SecureString \
+#     --overwrite --value "$(uv run python -m api.auth alice bob)"
+
+resource "aws_ssm_parameter" "reviewers" {
+  name  = "/${local.name}/reviewers"
+  type  = "SecureString"
+  value = "set-me-from-the-cli"
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
 # --- IAM -------------------------------------------------------------------
 
 data "aws_iam_policy_document" "ecs_tasks_assume" {
