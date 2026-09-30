@@ -133,13 +133,42 @@ resource "aws_lb_target_group" "api" {
   deregistration_delay = 5
 }
 
+# Port 80 only redirects. Nothing, a login least of all, is served over it.
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
   default_action {
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = local.p.certificate_arn
+  default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.api.arn
+  }
+}
+
+# The hostname exists only while a demo does; destroy removes it.
+resource "aws_route53_record" "demo" {
+  zone_id = local.p.zone_id
+  name    = local.p.hostname
+  type    = "A"
+  alias {
+    name                   = aws_lb.main.dns_name
+    zone_id                = aws_lb.main.zone_id
+    evaluate_target_health = false
   }
 }
 
@@ -295,7 +324,7 @@ resource "aws_ecs_service" "api" {
   service_registries {
     registry_arn = aws_service_discovery_service.api.arn
   }
-  depends_on = [aws_lb_listener.http]
+  depends_on = [aws_lb_listener.https]
 }
 
 resource "aws_ecs_service" "worker" {

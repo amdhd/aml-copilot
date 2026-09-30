@@ -95,8 +95,15 @@ resource "aws_security_group" "alb" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
+    description = "Redirected to 443 by the listener"
     from_port   = 80
     to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_cidrs
+  }
+  ingress {
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = var.allowed_cidrs
   }
@@ -206,6 +213,47 @@ data "aws_caller_identity" "current" {}
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/${local.name}"
   retention_in_days = 7
+}
+
+# --- TLS -------------------------------------------------------------------
+#
+# Reviewers log in with basic auth (api/auth.py), which sends the password on
+# every request, so the ALB serves HTTPS. The certificate is free and validates
+# in minutes, but not instantly, so it lives here rather than in ephemeral: an
+# apply before a demo should not wait on DNS. The alias record pointing the
+# hostname at the ALB is ephemeral, and exists only while a demo does.
+#
+# The zone is looked up, not created. It is shared with other projects, and
+# this layer adds exactly one record to it: the validation CNAME, which ACM
+# also needs to renew.
+
+data "aws_route53_zone" "demo" {
+  name         = var.domain_zone
+  private_zone = false
+}
+
+resource "aws_acm_certificate" "demo" {
+  domain_name       = var.hostname
+  validation_method = "DNS"
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "cert_validation" {
+  for_each = {
+    for o in aws_acm_certificate.demo.domain_validation_options : o.domain_name => o
+  }
+  zone_id = data.aws_route53_zone.demo.zone_id
+  name    = each.value.resource_record_name
+  type    = each.value.resource_record_type
+  records = [each.value.resource_record_value]
+  ttl     = 300
+}
+
+resource "aws_acm_certificate_validation" "demo" {
+  certificate_arn         = aws_acm_certificate.demo.arn
+  validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
 }
 
 # --- LLM key ---------------------------------------------------------------

@@ -1,5 +1,5 @@
 output "url" {
-  value = "http://${aws_lb.main.dns_name}"
+  value = "https://${aws_route53_record.demo.fqdn}"
 }
 
 # For scripts/demo.sh, which runs the one-shot seed task against them.

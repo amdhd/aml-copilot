@@ -9,6 +9,10 @@ output "alb_sg_id" { value = aws_security_group.alb.id }
 output "tasks_sg_id" { value = aws_security_group.tasks.id }
 output "db_sg_id" { value = aws_security_group.db.id }
 
+output "certificate_arn" { value = aws_acm_certificate_validation.demo.certificate_arn }
+output "zone_id" { value = data.aws_route53_zone.demo.zone_id }
+output "hostname" { value = var.hostname }
+
 output "ecr_repository_url" { value = aws_ecr_repository.app.repository_url }
 output "artifacts_bucket" { value = aws_s3_bucket.artifacts.bucket }
 output "log_group" { value = aws_cloudwatch_log_group.app.name }
