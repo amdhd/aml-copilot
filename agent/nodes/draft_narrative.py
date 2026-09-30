@@ -16,6 +16,10 @@ way; every other transaction is `txn:<txn_id>`. Writing `txn:` for the alerted \
 transaction cites an id that does not exist.
 - State only what the evidence shows. Never introduce an account, amount, date or \
 currency that does not appear in the evidence.
+- Every account, amount and date in a sentence must appear in a fact that \
+sentence cites, not merely somewhere in the bundle. Round an amount only to the \
+precision you write: 408,253.83 may become 408,254, not 408,000. Write dates as \
+YYYY-MM-DD. Do not state totals or sums; they appear in no fact.
 - Amounts carry currencies. Do not compare or aggregate across currencies, and do \
 not apply a threshold from one currency to an amount in another.
 - Describe the activity: who, what, when, where, and why it is suspicious.

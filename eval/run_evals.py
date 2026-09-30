@@ -39,6 +39,8 @@ def run_one(graph, fixture):
         "hallucinated": len(state.get("hallucinated_entities") or []),
         "guidance_cites": sum(i.startswith("guidance:") for i in citations),
         "guidance_only": len(state.get("guidance_only") or []),
+        "no_case_fact": len(state.get("no_case_fact") or []),
+        "unsupported": len(state.get("unsupported") or []),
         "escalated": bool(state.get("escalated")),
         "prompt_tokens": sum(u["prompt_tokens"] for u in usage.values()),
         "completion_tokens": sum(u["completion_tokens"] for u in usage.values()),
@@ -61,6 +63,7 @@ def main():
                 rows.append({**{k: 0 for k in
                                 ("seconds", "sentences", "citations", "unresolved",
                                  "hallucinated", "guidance_cites", "guidance_only",
+                                 "no_case_fact", "unsupported",
                                  "prompt_tokens", "completion_tokens",
                                  "cached_tokens")},
                              "alert_id": fixture["alert_id"],
@@ -95,6 +98,9 @@ def main():
           f"{sum(r['guidance_cites'] > 0 for r in drafted)}/{len(drafted)} "
           f"({sum(r['guidance_cites'] for r in rows)} cites) |")
     print(f"| Guidance-only sentences | **0** | {sum(r['guidance_only'] for r in rows)} |")
+    print(f"| Model-only sentences | **0** | {sum(r['no_case_fact'] for r in rows)} |")
+    print(f"| Unsupported accounts, amounts, dates | **0** | "
+          f"{sum(r['unsupported'] for r in rows)} |")
     print(f"| Escalated after retry | report | {sum(r['escalated'] for r in rows)} |")
     print(f"| p50 / p95 latency | report | {statistics.median(seconds):.1f}s / "
           f"{seconds[int(len(seconds) * 0.95) - 1]:.1f}s |")

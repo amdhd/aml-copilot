@@ -65,7 +65,9 @@ async def run_case(ctx, case_id: str, alert_id: int, decision: str | None = None
                 (state["verified"], state.get("escalated", False),
                  json.dumps({"citation_failures": state.get("citation_failures", []),
                              "hallucinated_entities": state.get("hallucinated_entities", []),
-                             "guidance_only": state.get("guidance_only", [])}),
+                             "guidance_only": state.get("guidance_only", []),
+                             "no_case_fact": state.get("no_case_fact", []),
+                             "unsupported": state.get("unsupported", [])}),
                  case_id))
 
 

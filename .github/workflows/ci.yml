@@ -95,3 +95,7 @@ jobs:
               sys.exit(f"cases is missing columns: {sorted(missing)}")
           print(f"cases schema ok, {len(cols)} columns")
           EOF
+
+      # Skipped in the smoke job, which has no database.
+      - name: Human gate answers once
+        run: uv run pytest tests/test_decision.py -rs

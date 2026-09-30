@@ -188,14 +188,29 @@ async def decide(case_id: str, body: Decision):
     Postgres since the interrupt, however long that took."""
     _valid_case_id(case_id)
     async with await psycopg.AsyncConnection.connect(DSN, autocommit=True) as conn:
+        # Claim the gate in one statement. A SELECT then an enqueue let a double
+        # click, or two reviewers, both pass the check: LangGraph resumed with
+        # the first decision and ignored the second, while this endpoint told
+        # both callers theirs was recorded. A concurrent UPDATE waits on the row
+        # lock and then finds the status already moved, so exactly one wins.
         row = await (await conn.execute(
-            "SELECT status, alert_id FROM cases WHERE case_id = %s", (case_id,))).fetchone()
+            "UPDATE cases SET status = 'resuming' WHERE case_id = %s"
+            " AND status = 'awaiting_review' RETURNING alert_id", (case_id,))).fetchone()
         if row is None:
-            raise HTTPException(404, "no such case")
-        if row[0] != "awaiting_review":
-            raise HTTPException(409, f"case is {row[0]}, not awaiting_review")
-    await app.state.redis.enqueue_job("run_case", case_id, row[1], body.decision)
-    return {"case_id": case_id, "status": body.decision}
+            current = await (await conn.execute(
+                "SELECT status FROM cases WHERE case_id = %s", (case_id,))).fetchone()
+            if current is None:
+                raise HTTPException(404, "no such case")
+            raise HTTPException(409, f"case is {current[0]}, not awaiting_review")
+        try:
+            await app.state.redis.enqueue_job("run_case", case_id, row[0], body.decision)
+        except Exception:
+            # Unclaimed, or the case would sit in `resuming` with no job behind it.
+            await conn.execute(
+                "UPDATE cases SET status = 'awaiting_review' WHERE case_id = %s",
+                (case_id,))
+            raise
+    return {"case_id": case_id, "status": "resuming", "decision": body.decision}
 
 
 # Last, so every API route above matches first. Only when the UI has been built:
