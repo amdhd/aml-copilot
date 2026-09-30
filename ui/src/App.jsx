@@ -76,7 +76,7 @@ export default function App() {
           </button>
         </nav>
       )}
-      {!caseId && view === 'queue' && <AlertQueue onOpen={open} />}
+      {!caseId && view === 'queue' && <AlertQueue onOpen={open} onOpenCase={setCaseId} />}
       {!caseId && view === 'cases' && <CaseList onOpen={setCaseId} />}
       {caseId && !settled && backLink}
       {caseId && !kase && !error && <p className="muted">Opening case…</p>}

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { getCases } from './api'
 
-const chip = status => `chip chip-${status.replace('_', '-')}`
+export const chip = status => `chip chip-${status.replace('_', '-')}`
 
 // Cases already opened. Not one of the four screens in section 7, but a run
 // parked at the human gate waits hours or days -- without this it is reachable
