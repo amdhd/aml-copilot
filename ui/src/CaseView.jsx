@@ -33,7 +33,7 @@ function Citation({ id, fact }) {
   )
 }
 
-export default function CaseView({ kase, onBack, onRefresh }) {
+export default function CaseView({ kase, onRefresh, backLink }) {
   const [busy, setBusy] = useState(false)
   const evidence = kase.evidence ?? {}
   const narrative = kase.narrative ?? []
@@ -56,7 +56,7 @@ export default function CaseView({ kase, onBack, onRefresh }) {
 
   return (
     <>
-      <button className="link" onClick={onBack}>← queue</button>
+      {backLink}
       <h2>Alert {kase.alert_id}</h2>
       <p className="muted mono">{kase.case_id} · {kase.status}</p>
 

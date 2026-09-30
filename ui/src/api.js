@@ -1,6 +1,13 @@
 const json = async (path, init) => {
   const response = await fetch(`/api${path}`, init)
-  if (!response.ok) throw new Error(`${response.status} ${await response.text()}`)
+  if (!response.ok) {
+    // FastAPI puts the reason in `detail`. Shown raw, a reviewer read
+    // `404 {"detail":"no such alert"}`; a bare status said nothing at all.
+    const text = await response.text()
+    let detail = text
+    try { detail = JSON.parse(text).detail ?? text } catch { /* not JSON */ }
+    throw new Error(`${response.status}: ${detail || response.statusText}`)
+  }
   return response.json()
 }
 
