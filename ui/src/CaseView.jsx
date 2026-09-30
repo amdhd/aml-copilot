@@ -7,12 +7,16 @@ const label = { transaction: 'Transaction', alert: 'Alerted transaction',
                 gnn_subgraph: 'GNN subgraph' }
 
 // Screen 2: the drafted narrative, every sentence carrying the evidence it
-// rests on. Hovering a citation resolves it against the bundle the pipeline
-// actually assembled -- the same ids the verifier checked.
+// rests on. Hovering or focusing a citation resolves it against the bundle the
+// pipeline actually assembled -- the same ids the verifier checked. Focus, not
+// only hover: a keyboard or a touchscreen has no hover, and tapping a
+// focusable element focuses it.
 function Citation({ id, fact }) {
   const [open, setOpen] = useState(false)
   return (
-    <span className="cite" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+    <span className="cite" tabIndex={0} aria-expanded={open}
+          onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}
+          onFocus={() => setOpen(true)} onBlur={() => setOpen(false)}>
       {id}
       {open && (
         <span className="popover">
@@ -33,14 +37,27 @@ function Citation({ id, fact }) {
   )
 }
 
+// What the decision panel says once the gate is not waiting. `done` never
+// reached the gate -- the classifier found no pattern and the run stopped --
+// and `failed` stopped on an error; neither was answered by anyone.
+const outcome = kase => ({
+  approved: `This case was approved${kase.decided_by ? ` by ${kase.decided_by}` : ''}.`,
+  rejected: `This case was rejected${kase.decided_by ? ` by ${kase.decided_by}` : ''}.`,
+  done: 'No suspicious pattern was found, so no narrative was drafted and there is nothing to decide.',
+  failed: `This case failed before reaching review (${kase.error ?? 'unknown error'}). ` +
+          'Nothing was decided. Investigate the alert again from the queue to retry.',
+}[kase.status] ?? `This case is ${kase.status}.`)
+
 export default function CaseView({ kase, onRefresh, backLink }) {
   const [busy, setBusy] = useState(false)
+  const [refused, setRefused] = useState(null)
   const evidence = kase.evidence ?? {}
   const narrative = kase.narrative ?? []
 
   // Screen 4: approve or reject resumes the run parked at the human gate.
   const submit = async decision => {
     setBusy(true)
+    setRefused(null)
     try {
       await decide(kase.case_id, decision)
       // The API returns as soon as the job is queued. The worker then resumes
@@ -51,6 +68,13 @@ export default function CaseView({ kase, onRefresh, backLink }) {
         const next = await onRefresh()
         if (next && next.status !== 'awaiting_review') break
       }
+    } catch (e) {
+      // Refused -- someone else decided first (409), or the login lapsed.
+      // Silently re-enabling the buttons read as a click that did nothing.
+      // No refresh: after a 409 the case has moved on, the page would swap
+      // to the running view, and this message would go before it was read.
+      // The 409's own text names the status the case is in.
+      setRefused(e.message)
     } finally { setBusy(false) }
   }
 
@@ -115,11 +139,9 @@ export default function CaseView({ kase, onRefresh, backLink }) {
             <button disabled={busy} onClick={() => submit('rejected')}>Reject</button>
           </>
         ) : (
-          <p className="muted">
-            This case is {kase.status}
-            {kase.decided_by && ` by ${kase.decided_by}`}; the gate has already been answered.
-          </p>
+          <p className="muted">{outcome(kase)}</p>
         )}
+        {refused && <p className="error">Your decision was not recorded: {refused}</p>}
       </section>
     </>
   )
