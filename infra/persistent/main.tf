@@ -156,9 +156,11 @@ resource "aws_security_group" "db" {
 
 # --- Image and artifacts ---------------------------------------------------
 
+# Tags are git commits (scripts/demo.sh), so a tag is a promise about what is
+# inside. Mutable, anyone with push rights could put different code behind one.
 resource "aws_ecr_repository" "app" {
   name                 = local.name
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
   image_scanning_configuration {
     scan_on_push = true
   }

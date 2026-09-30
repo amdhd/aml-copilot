@@ -28,6 +28,12 @@ push() {
     echo "uncommitted changes: the image would not match $TAG. Commit first."
     exit 1
   fi
+  # Tags are immutable in ECR, and this commit's image is already this commit.
+  if aws ecr describe-images --repository-name aml-copilot \
+       --image-ids imageTag="$TAG" >/dev/null 2>&1; then
+    echo "$TAG is already in ECR"
+    return
+  fi
   # --provenance=false: one manifest per tag, which the ECR lifecycle rule
   # (infra/persistent) counts correctly.
   docker build --provenance=false --sbom=false -t "$REPO:$TAG" .

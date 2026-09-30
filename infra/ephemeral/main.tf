@@ -59,6 +59,9 @@ resource "aws_db_instance" "main" {
 
   allocated_storage = 20
   storage_type      = "gp3"
+  # With the AWS-managed key: free, and the default of false is what every
+  # scanner flags. Rebuilt each apply, so turning it on costs nothing either.
+  storage_encrypted = true
 
   db_name  = "aml"
   username = "aml"
