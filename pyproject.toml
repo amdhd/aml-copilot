@@ -35,12 +35,25 @@ train = [
     "xgboost>=2.1",
     "shap>=0.52.0",
     "tensorboard>=2.21.0",
-    "pypdf>=6.17.0",
+    "pypdf>=6.21.1",
 ]
 
 [tool.uv]
 # Local dev and CI get everything; the image build passes --no-default-groups.
 default-groups = ["dev", "train"]
+
+# Security floors: minimum versions that clear known CVEs (pip-audit, 2026-10-23).
+# These are transitive deps; pinning a floor keeps the resolver from selecting a
+# vulnerable version without forcing a version that conflicts with a parent.
+constraint-dependencies = [
+    "pillow>=13.0.0",
+    "pyjwt>=2.15.0",
+    "aiohttp>=3.14.4",
+    "urllib3>=2.8.0",
+    "certifi>=2026.10.19",
+    "werkzeug>=3.1.9",
+    "multidict>=6.9.1",
+]
 
 # PyPI's linux torch wheel declares the CUDA runtime as dependencies -- 44
 # nvidia-* packages, ~2.5GB -- and Fargate has no GPU (section 8). They never
